@@ -54,6 +54,8 @@ export interface RoomMessage {
   readonly from: string;
   readonly text: string;
   readonly nonce: number;
+  /** Present since service 0.11.0. Absent on older records — "not re-verifiable", not "invalid". */
+  readonly sig?: string | null;
 }
 
 /** Which path carried the write. Placing is the same either way; witnessing is not. */
@@ -176,11 +178,22 @@ export async function lastNonce(room: string, did: string): Promise<number> {
   return highest;
 }
 
-/** Did a message with exactly this text, from this identity, reach the room? */
-async function landed(room: string, did: string, text: string, since: number): Promise<number | null> {
+/**
+ * The message with exactly this text from this identity, if it reached the room.
+ *
+ * The whole message, not just its sequence, because an attempt that landed may not be the
+ * attempt we last signed — each retry carries a fresh nonce, so the record in the room is the
+ * only account of which one the service actually took.
+ */
+async function landed(
+  room: string,
+  did: string,
+  text: string,
+  since: number,
+): Promise<RoomMessage | null> {
   const messages = await read(room, since);
   for (const message of messages) {
-    if (message.from === did && message.text === text) return message.seq;
+    if (message.from === did && message.text === text) return message;
   }
   return null;
 }
@@ -191,7 +204,16 @@ export interface PlaceRequest {
   readonly identity: Identity;
   readonly room: string;
   readonly text: string;
-  readonly nonce: string;
+  /**
+   * A fresh nonce, strictly greater than every one this key has used in this room.
+   *
+   * A function rather than a value, because every attempt needs its own. A nonce is spent the
+   * moment it is issued: while one attempt is backing off, another placement can take a
+   * higher one and land, and the first attempt's retry is then refused with *"is not greater
+   * than … the last one this key used"*. That was a real 400 on the deployed site, and it
+   * only appears when someone places faster than the service answers.
+   */
+  readonly nextNonce: () => string;
   /** Room head before the attempt, so the timeout check only reads what came after. */
   readonly sinceSeq: number;
   /** Called when a refusal is being retried, so the interface can say what is happening. */
@@ -213,17 +235,39 @@ export interface PlaceRequest {
  * a condition out there.
  */
 export async function place(request_: PlaceRequest): Promise<Outcome> {
-  const { identity, room, text, nonce, sinceSeq, onRetry, relayUrl } = request_;
+  const { identity, room, text, nextNonce, sinceSeq, onRetry, relayUrl } = request_;
   const backoff = request_.backoffMs ?? BACKOFF_MS;
-  const payload = messagePayload({ room, nonce, text });
-  const signature = await sign(identity, payload);
-  const url =
-    `${BASE_URL}/r/${encodeURIComponent(room)}/say-signed/${identity.did}/${signature}/` +
-    `${nonce}/${encodeURIComponent(text)}`;
+
+  // Signed per attempt, not once. See `nextNonce` above: re-sending a nonce that was issued
+  // before a concurrent placement is a 400 the person cannot act on. The *text* is fixed for
+  // the whole call, including its random token, which is what makes the "did it land anyway"
+  // check possible at all.
+  let nonce = "";
+  let signature = "";
+  const signAttempt = async (): Promise<void> => {
+    nonce = nextNonce();
+    signature = await sign(identity, messagePayload({ room, nonce, text }));
+  };
+
+  /** What we can honestly say about a message the room already holds. */
+  const fromRoom = (message: RoomMessage, via: Lane): Outcome => ({
+    kind: "placed",
+    seq: message.seq,
+    // The record in the room, not the attempt we happen to hold. They differ whenever an
+    // earlier attempt landed late, and reporting ours would export a proof for a message
+    // that was never published.
+    nonce: String(message.nonce),
+    signature: typeof message.sig === "string" && message.sig !== "" ? message.sig : signature,
+    text,
+    via,
+  });
 
   let lane: Lane = relayUrl === undefined ? "room" : "relay";
 
   const sendDirect = async (): Promise<number> => {
+    const url =
+      `${BASE_URL}/r/${encodeURIComponent(room)}/say-signed/${identity.did}/${signature}/` +
+      `${nonce}/${encodeURIComponent(text)}`;
     const { body } = await request(url);
     // The answer to a write is a room view: many [n] markers, ours last. The first one is
     // the oldest message still in the window and has nothing to do with this write.
@@ -243,6 +287,7 @@ export async function place(request_: PlaceRequest): Promise<Outcome> {
 
   for (let attempt = 0; ; attempt++) {
     try {
+      await signAttempt();
       const seq = lane === "relay" ? await sendViaRelay() : await sendDirect();
       return { kind: "placed", seq, signature, nonce, text, via: lane };
     } catch (error) {
@@ -255,8 +300,8 @@ export async function place(request_: PlaceRequest): Promise<Outcome> {
       // write may have landed and the answer been lost, and re-sending it would place a
       // second pixel — the exact mistake the timeout rule exists to prevent.
       if (lane === "relay" && error.upstreamStatus === null) {
-        const seq = await landed(room, identity.did, text, sinceSeq).catch(() => null);
-        if (seq !== null) return { kind: "placed", seq, signature, nonce, text, via: "relay" };
+        const message = await landed(room, identity.did, text, sinceSeq).catch(() => null);
+        if (message !== null) return fromRoom(message, "relay");
         lane = "room";
         onRetry?.(attempt + 1, "the relay did not answer — writing to the room directly");
         // No backoff: this is a different path, not another go at the same one.
@@ -273,8 +318,8 @@ export async function place(request_: PlaceRequest): Promise<Outcome> {
 
       // A timeout may have landed. Ask the room before doing anything else.
       if (error.status === "timeout" || error.status === "network") {
-        const seq = await landed(room, identity.did, text, sinceSeq).catch(() => null);
-        if (seq !== null) return { kind: "placed", seq, signature, nonce, text, via: lane };
+        const message = await landed(room, identity.did, text, sinceSeq).catch(() => null);
+        if (message !== null) return fromRoom(message, lane);
         if (attempt < backoff.length) {
           onRetry?.(attempt + 1, "no answer — the pixel is not in the room, trying again");
           await sleep(backoff[attempt]!);

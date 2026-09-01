@@ -56,6 +56,12 @@ const roomWith = (messages: object[]): Response =>
 
 const ACCEPTED = "[471] 2026-08-29T00:00:00.000000Z <z6Mk…abcd> px 12,47 3 k8f2a1";
 
+/** Nonces the way the real counter hands them out: a fresh, greater one every call. */
+function nonceSource(start = Number(NONCE)): () => string {
+  let next = start;
+  return () => String(next++);
+}
+
 async function attempt(
   script: Array<Response | "timeout">,
   overrides: Partial<Parameters<typeof place>[0]> = {},
@@ -66,7 +72,7 @@ async function attempt(
     identity,
     room: ROOM,
     text: TEXT,
-    nonce: NONCE,
+    nextNonce: nonceSource(),
     sinceSeq: 400,
     backoffMs: FAST,
     ...overrides,
@@ -175,7 +181,7 @@ describe("timeout — the write may already have landed", () => {
     })();
 
     const outcome = await place({
-      identity, room: ROOM, text: TEXT, nonce: NONCE, sinceSeq: 400, backoffMs: FAST,
+      identity, room: ROOM, text: TEXT, nextNonce: nonceSource(), sinceSeq: 400, backoffMs: FAST,
     });
 
     assert.equal(outcome.kind, "placed", "the pixel was in the room; it must be reported placed");
@@ -199,7 +205,7 @@ describe("timeout — the write may already have landed", () => {
       return ok(ACCEPTED);
     };
     const outcome = await place({
-      identity, room: ROOM, text: TEXT, nonce: NONCE, sinceSeq: 400, backoffMs: FAST,
+      identity, room: ROOM, text: TEXT, nextNonce: nonceSource(), sinceSeq: 400, backoffMs: FAST,
     });
     assert.equal(outcome.kind, "placed");
     assert.equal(calls.filter((c) => c.write).length, 2);
@@ -214,7 +220,7 @@ describe("timeout — the write may already have landed", () => {
       return roomWith([]);
     };
     const outcome = await place({
-      identity, room: ROOM, text: TEXT, nonce: NONCE, sinceSeq: 400, backoffMs: FAST,
+      identity, room: ROOM, text: TEXT, nextNonce: nonceSource(), sinceSeq: 400, backoffMs: FAST,
     });
     assert.equal(outcome.kind, "unknown");
     assert.ok(n > 0);
@@ -229,7 +235,7 @@ describe("timeout — the write may already have landed", () => {
       throw new TypeError("network down");
     };
     const outcome = await place({
-      identity, room: ROOM, text: TEXT, nonce: NONCE, sinceSeq: 400, backoffMs: [1],
+      identity, room: ROOM, text: TEXT, nextNonce: nonceSource(), sinceSeq: 400, backoffMs: [1],
     });
     assert.equal(outcome.kind, "unknown");
   });
@@ -333,7 +339,7 @@ describe("when the relay does not answer", () => {
       ]);
     };
     const outcome = await place({
-      identity, room: ROOM, text: TEXT, nonce: NONCE, sinceSeq: 400, backoffMs: FAST,
+      identity, room: ROOM, text: TEXT, nextNonce: nonceSource(), sinceSeq: 400, backoffMs: FAST,
       relayUrl: RELAY,
     });
     assert.equal(outcome.kind, "placed");
@@ -392,7 +398,7 @@ describe("when the relay does not answer", () => {
       return roomWith([]);
     };
     const outcome = await place({
-      identity, room: ROOM, text: TEXT, nonce: NONCE, sinceSeq: 400, backoffMs: FAST,
+      identity, room: ROOM, text: TEXT, nextNonce: nonceSource(), sinceSeq: 400, backoffMs: FAST,
       relayUrl: RELAY,
     });
     assert.equal(outcome.kind, "unknown");
@@ -407,5 +413,109 @@ describe("with no relay configured", () => {
     assert.equal(outcome.kind, "placed");
     assert.equal(outcome.kind === "placed" && outcome.via, "room");
     assert.equal(calls.filter((c) => c.write).length, 1);
+  });
+});
+
+/* Nonces across retries.
+ *
+ * A nonce is spent the moment it is issued, and the service refuses any that is not greater
+ * than the last one that key used in that room. So an attempt that backs off while another
+ * placement lands is holding a number that has become unusable, and re-sending it earns
+ * `400 nonce … is not greater than …`. That was a real refusal on the deployed site, from
+ * clicking faster than the service answers, and no unit test saw it because every test here
+ * placed one pixel at a time.
+ */
+describe("a retry", () => {
+  const nonceIn = (url: string): number => {
+    // …/say-signed/<did>/<sig>/<nonce>/<text>
+    const parts = url.split("/say-signed/")[1]?.split("/") ?? [];
+    return Number(parts[2]);
+  };
+
+  it("signs a fresh, greater nonce rather than re-sending the spent one", async () => {
+    const { calls } = await attempt([fail(503), fail(503), ok(ACCEPTED)]);
+    const writes = calls.filter((c) => c.write).map((c) => nonceIn(c.url));
+    assert.equal(writes.length, 3);
+    assert.ok(
+      writes[1]! > writes[0]! && writes[2]! > writes[1]!,
+      `nonces must strictly increase across attempts, got ${JSON.stringify(writes)}`,
+    );
+  });
+
+  it("signs each attempt afresh, so no two attempts carry the same signature", async () => {
+    const { calls } = await attempt([fail(503), ok(ACCEPTED)]);
+    const sigs = calls
+      .filter((c) => c.write)
+      .map((c) => c.url.split("/say-signed/")[1]?.split("/")[1]);
+    assert.equal(sigs.length, 2);
+    assert.notEqual(sigs[0], sigs[1], "a new nonce means a new payload means a new signature");
+  });
+
+  it("keeps the text identical, which is what makes the landed check possible", async () => {
+    // The random token is chosen once per placement, not per attempt. If it changed, a write
+    // that landed would be invisible to the check and the retry would place a second pixel.
+    const { calls } = await attempt([fail(503), fail(503), ok(ACCEPTED)]);
+    const texts = new Set(
+      calls.filter((c) => c.write).map((c) => c.url.split("/say-signed/")[1]?.split("/")[3]),
+    );
+    assert.equal(texts.size, 1, "every attempt must carry the same placement text");
+  });
+});
+
+describe("a write that landed after we stopped hearing about it", () => {
+  it("reports the room's own nonce and signature, not the attempt we happen to hold", async () => {
+    // The attempt that landed is not necessarily the one we last signed. Reporting ours would
+    // hand the person an export for a message that was never published — a proof of nothing,
+    // shaped exactly like a proof of something.
+    const identity = await fromSeedHex(SEED);
+    const calls: Call[] = [];
+    (globalThis as { fetch: unknown }).fetch = (() => {
+      let n = 0;
+      return async (input: unknown): Promise<Response> => {
+        const url = String(input);
+        calls.push({ url, write: url.includes("/say-signed/") });
+        if (n++ === 0) throw new DOMException("aborted", "AbortError");
+        return roomWith([
+          {
+            seq: 900,
+            ts: "t",
+            from: identity.did,
+            text: TEXT,
+            nonce: 1787900000000,
+            sig: "R".repeat(85) + "Q",
+          },
+        ]);
+      };
+    })();
+
+    const outcome = await place({
+      identity, room: ROOM, text: TEXT, nextNonce: nonceSource(1788000000000), sinceSeq: 400,
+      backoffMs: FAST,
+    });
+
+    assert.equal(outcome.kind, "placed");
+    if (outcome.kind !== "placed") return;
+    assert.equal(outcome.seq, 900);
+    assert.equal(outcome.nonce, "1787900000000", "the nonce must be the room's, not ours");
+    assert.equal(outcome.signature, "R".repeat(85) + "Q", "the signature must be the room's");
+  });
+
+  it("falls back to the signature we hold when the record predates published ones", async () => {
+    const identity = await fromSeedHex(SEED);
+    (globalThis as { fetch: unknown }).fetch = (() => {
+      let n = 0;
+      return async (input: unknown): Promise<Response> => {
+        if (n++ === 0) throw new DOMException("aborted", "AbortError");
+        return roomWith([
+          { seq: 901, ts: "t", from: identity.did, text: TEXT, nonce: 1787900000000 },
+        ]);
+      };
+    })();
+
+    const outcome = await place({
+      identity, room: ROOM, text: TEXT, nextNonce: nonceSource(), sinceSeq: 400, backoffMs: FAST,
+    });
+    assert.equal(outcome.kind, "placed");
+    assert.match(outcome.kind === "placed" ? outcome.signature : "", /^[A-Za-z0-9_-]{86}$/);
   });
 });
