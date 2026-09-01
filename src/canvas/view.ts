@@ -25,6 +25,9 @@ export class View {
   private scale = 1;
   private tx = 0;
   private ty = 0;
+  /** The CSS box the current tx/ty were computed against, so a resize can re-centre. */
+  private boxW = 0;
+  private boxH = 0;
   private hovered: number | null = null;
   private frameQueued = false;
   /** Set while the pointer is down and past the slop threshold. */
@@ -66,10 +69,31 @@ export class View {
     const r = this.canvas.getBoundingClientRect();
     this.canvas.width = Math.max(1, Math.round(r.width * this.dpr));
     this.canvas.height = Math.max(1, Math.round(r.height * this.dpr));
+
     // A scale computed for the old box leaves the canvas cropped in the new one. Re-framing
     // is only safe while the player has not framed it themselves.
-    if (this.userFramed) this.request();
-    else this.fit();
+    if (!this.userFramed) {
+      this.fit();
+      this.boxW = r.width;
+      this.boxH = r.height;
+      return;
+    }
+
+    /* Keep whatever was in the middle in the middle.
+     *
+     * `tx`/`ty` place the buffer's origin against the box's top-left, so leaving them alone
+     * across a resize pins the content to that corner and everything else slides. Browser
+     * zoom resizes the box on every notch, which turned ctrl+scroll into the canvas walking
+     * off toward the corner — a lot of drift for what should be a scale change. */
+    if (this.boxW > 0 && this.boxH > 0) {
+      const bx = (this.boxW / 2 - this.tx) / this.scale;
+      const by = (this.boxH / 2 - this.ty) / this.scale;
+      this.tx = r.width / 2 - bx * this.scale;
+      this.ty = r.height / 2 - by * this.scale;
+    }
+    this.boxW = r.width;
+    this.boxH = r.height;
+    this.request();
   }
 
   /** Frame the whole canvas with a margin, and centre it. */
@@ -81,6 +105,8 @@ export class View {
     this.setScale(s, r.width / 2, r.height / 2, true);
     this.tx = (r.width - BUF_W * this.scale) / 2;
     this.ty = (r.height - BUF_H * this.scale) / 2;
+    this.boxW = r.width;
+    this.boxH = r.height;
     this.userFramed = false;
     this.request();
   }
