@@ -1,0 +1,580 @@
+/* PLOT — the identity recorded in .design/identity.md.
+   Components never name a world colour. They name a role, and the role is redirected here. */
+
+:root {
+  --plot-10: #EDF2F4;
+  --plot-20: #FBFDFD;
+  --plot-30: #7FBFCF;
+  --plot-40: #0B8FA8;
+  --plot-100: #0F2A33;
+  --plot-line: #C3D3D9;
+
+  --current-color-10: var(--plot-10);
+  --current-color-20: var(--plot-20);
+  --current-color-30: var(--plot-30);
+  --current-color-40: var(--plot-40);
+  --current-color-100: var(--plot-100);
+  --current-line: var(--plot-line);
+
+  /* A warning colour, because refusals and destructive actions need one and the PLOT scale
+     has no red. Kept in the same cool-slate family as the ink so it reads as part of the
+     identity rather than a browser default, and dark enough to clear 4.5:1 on the ground. */
+  --plot-warn: #8A3A2A;
+  --current-warn: var(--plot-warn);
+
+  --font-display: "Archivo", "Helvetica Now Display", system-ui, sans-serif;
+  --font-micro: "Martian Mono", ui-monospace, "Cascadia Mono", monospace;
+
+  --t-micro: 11px;
+  --t-body: 16px;
+  --t-mid: 21px;
+  --t-huge: clamp(52px, 8vw, 116px);
+
+  --s-1: 8px;
+  --s-2: 16px;
+  --s-3: 32px;
+  --s-4: 64px;
+
+  --radius: 0px;
+  --rail: 56px;
+
+  --d-small: 0.2s;
+  --d-base: 0.3s;
+  --d-large: 0.6s;
+  --ease: cubic-bezier(0.59, 0.06, 0.1, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--current-color-10);
+  color: var(--current-color-100);
+  font-family: var(--font-display);
+  font-size: var(--t-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.micro {
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--current-color-40);
+}
+
+/* ---- theme carrier: a ruler down the left edge, fixed, always present -------------- */
+
+.ruler {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: var(--rail);
+  border-right: 1px solid var(--current-line);
+  background: var(--current-color-20);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s-2) 0;
+  z-index: 2;
+}
+
+.ruler__tick {
+  width: 7px;
+  height: 7px;
+  background: var(--current-color-40);
+  flex: none;
+}
+
+.ruler__name {
+  writing-mode: vertical-rl;
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--current-color-100);
+  opacity: 0.55;
+}
+
+/* ---- shell ------------------------------------------------------------------------ */
+
+.shell {
+  margin-left: var(--rail);
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-3) var(--s-2);
+}
+
+.head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-3);
+  border-bottom: 1px solid var(--current-line);
+  padding-bottom: var(--s-2);
+}
+
+.head h1 {
+  /* Not --t-huge: that scale belongs to a landing page. Here the canvas carries the
+     weight and the title only has to be unmistakably Archivo 800. */
+  font-size: clamp(26px, 3.2vw, 44px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  margin-top: 6px;
+}
+
+/* Body type, not micro: this is the one line on the page a person must actually read, and
+   uppercase 11px monospace is for labels. Sized and coloured to sit under the title without
+   competing with it — the canvas is still the thing that came for the height. */
+.disclaim {
+  margin-top: var(--s-1);
+  max-width: 62ch;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--current-color-100);
+  opacity: 0.72;
+}
+
+.disclaim strong {
+  font-weight: 600;
+  opacity: 1;
+}
+
+.head__right {
+  text-align: right;
+  display: grid;
+  gap: 6px;
+  flex: none;
+}
+
+.head__stat {
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+
+.head__stat span:first-child {
+  color: var(--current-color-40);
+  font-weight: 600;
+}
+
+.head__stat span:last-child {
+  opacity: 0.5;
+}
+
+/* ---- stage ------------------------------------------------------------------------ */
+
+.stage {
+  position: relative;
+  background: var(--current-color-20);
+  border: 1px solid var(--current-line);
+  border-radius: var(--radius);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* The shape signature as a corner cut, not a rounded box. */
+.stage__corner {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 12px;
+  height: 12px;
+  border-top: 2px solid var(--current-color-40);
+  border-right: 2px solid var(--current-color-40);
+  pointer-events: none;
+}
+
+.reset {
+  position: absolute;
+  left: var(--s-2);
+  bottom: var(--s-2);
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--current-color-100);
+  background: var(--current-color-20);
+  border: 1px solid var(--current-line);
+  border-radius: var(--radius);
+  padding: 7px 10px 7px 14px;
+  cursor: pointer;
+  transition: color var(--d-small) var(--ease), border-color var(--d-small) var(--ease);
+}
+
+/* Corner brackets 4px inside, per the identity. */
+.reset::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 5px;
+  height: 5px;
+  border-left: 1px solid var(--current-color-40);
+  border-top: 1px solid var(--current-color-40);
+}
+
+.reset:hover,
+.reset:focus-visible {
+  color: var(--current-color-40);
+  border-color: var(--current-color-40);
+  outline: none;
+}
+
+/* ---- foot: the ramp and the readout ----------------------------------------------- */
+
+.foot {
+  display: grid;
+  gap: var(--s-1);
+}
+
+.ramp {
+  display: flex;
+  gap: 3px;
+}
+
+.ramp button {
+  flex: 1;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  transition: transform var(--d-small) var(--ease), border-color var(--d-small) var(--ease);
+}
+
+.ramp button:hover {
+  transform: translateY(-3px);
+}
+
+.ramp button[aria-checked="true"] {
+  border-color: var(--current-color-100);
+  transform: translateY(-5px);
+}
+
+/* The selected step is marked with the crosshair, not with a rounded pill. */
+.ramp button[aria-checked="true"]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  width: 1px;
+  height: 6px;
+  background: var(--current-color-100);
+}
+
+.ramp button:focus-visible {
+  outline: 1px solid var(--current-color-40);
+  outline-offset: 2px;
+}
+
+.ramp__ends {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-micro);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.5;
+  margin-top: 6px;
+}
+
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  border-top: 1px solid var(--current-line);
+  padding-top: var(--s-2);
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+}
+
+.readout div {
+  display: flex;
+  gap: var(--s-1);
+  align-items: baseline;
+}
+
+.readout dt {
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.5;
+}
+
+.readout dd {
+  color: var(--current-color-40);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- identity, status, gate ------------------------------------------------------- */
+
+.ident {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  border-top: 1px solid var(--current-line);
+  padding-top: var(--s-2);
+}
+
+.ident__label {
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.5;
+}
+
+.ident code {
+  font-family: var(--font-micro);
+  color: var(--current-color-40);
+  font-weight: 600;
+}
+
+.link {
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--current-line);
+  color: var(--current-color-100);
+  padding: 2px 0;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: color var(--d-small) var(--ease), opacity var(--d-small) var(--ease),
+    border-color var(--d-small) var(--ease);
+}
+
+.link:hover,
+.link:focus-visible {
+  opacity: 1;
+  color: var(--current-color-40);
+  border-color: var(--current-color-40);
+  outline: none;
+}
+
+.link--warn:hover,
+.link--warn:focus-visible {
+  color: var(--current-warn);
+  border-color: var(--current-warn);
+}
+
+.status {
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  letter-spacing: 0.06em;
+  min-height: 1.2em;
+  color: var(--current-color-100);
+  opacity: 0.75;
+}
+
+.status[data-tone="warn"] {
+  color: var(--current-warn);
+  opacity: 1;
+}
+
+.status[data-tone="ok"] {
+  color: var(--current-color-40);
+  opacity: 1;
+}
+
+/* An author `display` beats the user-agent's `[hidden] { display: none }`, so setting the
+   attribute would leave the panel on screen and the person stuck behind it. Found by the
+   end-to-end test clicking "I understand" and watching nothing happen. */
+.gate[hidden] {
+  display: none;
+}
+
+.gate {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--current-color-20) 92%, transparent);
+  display: grid;
+  place-items: center;
+  padding: var(--s-3);
+  z-index: 3;
+}
+
+.gate__panel {
+  max-width: 52ch;
+  background: var(--current-color-20);
+  border: 1px solid var(--current-color-100);
+  border-radius: var(--radius);
+  padding: var(--s-3);
+  position: relative;
+}
+
+/* The shape signature again: a cut corner, not a rounded dialog. */
+.gate__panel::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: -1px;
+  width: 14px;
+  height: 14px;
+  border-left: 2px solid var(--current-color-40);
+  border-top: 2px solid var(--current-color-40);
+}
+
+.gate h2 {
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin: var(--s-1) 0 var(--s-2);
+}
+
+.gate p,
+.gate li {
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  line-height: 1.8;
+}
+
+.gate ul {
+  margin: var(--s-2) 0 var(--s-3);
+  padding-left: 1.1em;
+}
+
+.gate__actions {
+  display: flex;
+  gap: var(--s-1);
+  flex-wrap: wrap;
+}
+
+.btn {
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  background: var(--current-color-20);
+  color: var(--current-color-100);
+  border: 1px solid var(--current-line);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: color var(--d-small) var(--ease), border-color var(--d-small) var(--ease),
+    background var(--d-small) var(--ease);
+}
+
+.btn:hover,
+.btn:focus-visible {
+  border-color: var(--current-color-40);
+  color: var(--current-color-40);
+  outline: none;
+}
+
+.btn--accent {
+  background: var(--current-color-100);
+  color: var(--current-color-20);
+  border-color: var(--current-color-100);
+}
+
+.btn--accent:hover,
+.btn--accent:focus-visible {
+  background: var(--current-color-40);
+  border-color: var(--current-color-40);
+  color: var(--current-color-20);
+}
+
+.proof {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  margin-top: var(--s-1);
+}
+
+.proof__hint {
+  opacity: 0.5;
+}
+
+.link[disabled] {
+  opacity: 0.3;
+  cursor: default;
+  border-color: transparent;
+}
+
+.link[disabled]:hover {
+  color: inherit;
+  border-color: transparent;
+}
+
+/* Attested is not a failure state, so it is not red. It is simply a weaker claim, and the
+   readout says so in the same voice it says everything else. */
+.readout dd[data-basis="attested"] {
+  color: var(--current-color-100);
+  opacity: 0.7;
+}
+
+/* ---- narrow ----------------------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  :root {
+    --rail: 44px;
+    --s-3: 20px;
+  }
+
+  .head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s-1);
+  }
+
+  .head__right {
+    text-align: left;
+  }
+
+  .head h1 {
+    font-size: clamp(24px, 7vw, 34px);
+  }
+
+  /* The stage keeps filling the column. Constraining it to the content's 1.8:1 was tried
+     and was worse: it moved the empty space out of the framed stage and onto the page,
+     where it reads as a broken layout rather than as room to zoom into. */
+  .ramp button {
+    height: 40px;
+  }
+
+  .readout {
+    gap: var(--s-2);
+    row-gap: var(--s-1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

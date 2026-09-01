@@ -1,0 +1,27 @@
+{
+  "name": "signed-canvas",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A pixel canvas where every placement is a signed did:key write.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "serve": "node build.mjs --watch --serve",
+    "typecheck": "tsc --noEmit",
+    "bench": "node build.mjs --bench && node bench/run-matrix.mjs",
+    "test": "node --test --experimental-strip-types \"test/*.test.ts\"",
+    "shots": "node scripts/shots.mjs",
+    "check": "npm run typecheck && npm test && npm run test:python && npm run test:browser && npm run build && npm run bench",
+    "test:browser": "node test/browser/run.mjs",
+    "test:python": "node scripts/test-python.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "playwright": "^1.58.2",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@noble/ed25519": "^3.2.0"
+  }
+}

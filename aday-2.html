@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Signed Canvas — aday 2 · ARENA</title>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f%5B%5D=clash-display@400,600,700&display=swap">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;600&display=swap">
+<style>
+/* ============================================================
+   ADAY 2 — "ARENA"
+   hue: asit yesili-patlican · tipografi: Clash Display + Azeret Mono
+   sekil imzasi: kose pahi (bevel), sekizgen kesim
+   tasiyici: ust enerji cubugu
+   ============================================================ */
+:root{
+  --arena-10:#191022;   /* zemin — derin patlican, siyah degil */
+  --arena-20:#241730;   /* yuzey */
+  --arena-40:#B6FF3A;   /* aksan — asit yesili */
+  --arena-100:#F2E9FA;  /* murekkep — lila dokunuslu acik */
+  --arena-line:#3A2A48;
+  --arena-30:#6B3FA0;   /* ara ton */
+  --arena-35:#E4A3FF;   /* acik ara ton */
+  --arena-25:#2E1F3C;   /* bos piksel */
+
+  --current-color-10:var(--arena-10);
+  --current-color-20:var(--arena-20);
+  --current-color-40:var(--arena-40);
+  --current-color-100:var(--arena-100);
+  --current-line:var(--arena-line);
+  --current-color-30:var(--arena-30);
+  --current-color-35:var(--arena-35);
+  --current-color-25:var(--arena-25);
+
+  --font-baslik:'Clash Display','Helvetica Now Display',system-ui,sans-serif;
+  --font-mikro:'Azeret Mono',ui-monospace,'Cascadia Mono',monospace;
+
+  --t-mikro:11px; --t-govde:16px; --t-orta:22px; --t-dev:clamp(56px,9vw,132px);
+  --s-1:8px; --s-2:16px; --s-3:32px; --s-4:64px; --s-5:104px;
+  --pah:14px;                    /* sekil imzasi: kose pahi olcegi */
+
+  --d-kucuk:.2s; --d-var:.3s; --d-buyuk:.6s;
+  --ease:cubic-bezier(.62,.04,.12,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--current-color-10); color:var(--current-color-100);
+  font-family:var(--font-baslik); font-size:var(--t-govde); line-height:1.5;
+  -webkit-font-smoothing:antialiased; padding-top:44px;
+}
+/* --- tasiyici: ust enerji cubugu --- */
+.enerji{
+  position:fixed; inset:0 0 auto 0; height:44px; z-index:9;
+  background:var(--current-color-20); border-bottom:1px solid var(--current-line);
+  display:flex; align-items:center; gap:var(--s-2); padding:0 var(--s-3);
+}
+.enerji .dolgu{
+  position:absolute; left:0; bottom:-1px; height:2px; width:38%;
+  background:var(--current-color-40);
+}
+.enerji .ad{
+  font-family:var(--font-mikro); font-size:var(--t-mikro); letter-spacing:.22em;
+  text-transform:uppercase; font-weight:600;
+}
+.enerji .sag{margin-left:auto;font-family:var(--font-mikro);font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--current-color-40)}
+
+.kap{max-width:1120px;margin:0 auto;padding:var(--s-4) var(--s-3)}
+
+.mikro{
+  font-family:var(--font-mikro); font-size:var(--t-mikro); letter-spacing:.2em;
+  text-transform:uppercase; color:var(--current-color-40); font-weight:600;
+}
+
+/* --- hero --- */
+.hero{padding:var(--s-5) 0 var(--s-4)}
+h1{
+  font-family:var(--font-baslik); font-size:var(--t-dev); font-weight:700;
+  line-height:.86; letter-spacing:-.03em; margin:var(--s-2) 0 var(--s-3); max-width:13ch;
+}
+h1 span{
+  display:inline-block; background:var(--current-color-40); color:var(--arena-10);
+  padding:0 .18em; clip-path:polygon(var(--pah) 0,100% 0,100% calc(100% - var(--pah)),calc(100% - var(--pah)) 100%,0 100%,0 var(--pah));
+}
+.ozet{max-width:54ch;font-size:var(--t-orta);opacity:.78;line-height:1.4}
+
+/* --- buton: pah imzasi --- */
+.btn{
+  font-family:var(--font-mikro); font-size:var(--t-mikro); letter-spacing:.2em;
+  text-transform:uppercase; font-weight:600; cursor:pointer; border:0;
+  background:var(--current-color-40); color:var(--arena-10);
+  padding:18px 34px;
+  clip-path:polygon(var(--pah) 0,100% 0,100% calc(100% - var(--pah)),calc(100% - var(--pah)) 100%,0 100%,0 var(--pah));
+  transition:transform var(--d-kucuk) var(--ease), filter var(--d-kucuk) var(--ease);
+}
+.btn:hover{transform:translate(-2px,-2px); filter:brightness(1.08)}
+
+/* --- kart --- */
+.izgara{display:grid;grid-template-columns:1fr 1fr;gap:var(--s-3);margin-top:var(--s-4)}
+.kart{
+  background:var(--current-color-20); padding:var(--s-3); border:1px solid var(--current-line);
+  clip-path:polygon(var(--pah) 0,100% 0,100% calc(100% - var(--pah)),calc(100% - var(--pah)) 100%,0 100%,0 var(--pah));
+}
+.kart h3{font-size:var(--t-orta);font-weight:600;margin-bottom:var(--s-2);letter-spacing:-.01em}
+.satir{display:flex;justify-content:space-between;gap:var(--s-2);padding:11px 0;
+  border-bottom:1px solid var(--current-line);font-family:var(--font-mikro);font-size:12px}
+.satir:last-child{border-bottom:0}
+.satir .k{opacity:.6;font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+.satir .d{text-align:right;word-break:break-all}
+.dogru{color:var(--current-color-40);font-weight:600}
+
+/* --- ikincil yuzey --- */
+.tuval{background:var(--current-color-20);border:1px solid var(--current-line);padding:var(--s-2);
+  clip-path:polygon(var(--pah) 0,100% 0,100% calc(100% - var(--pah)),calc(100% - var(--pah)) 100%,0 100%,0 var(--pah))}
+.pikseller{display:grid;grid-template-columns:repeat(16,1fr);gap:3px}
+.px{aspect-ratio:1;background:var(--current-color-25);transition:transform var(--d-kucuk) var(--ease)}
+.px:hover{transform:scale(1.4)}
+.px.a{background:var(--current-color-40)}
+.px.b{background:var(--current-color-30)}
+.px.c{background:var(--current-color-35)}
+.tuval .alt{display:flex;justify-content:space-between;margin-top:var(--s-2)}
+
+@media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important;animation-duration:.01ms !important}}
+@media (max-width:820px){.izgara{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header class="enerji">
+  <span class="dolgu"></span>
+  <span class="ad">Signed Canvas</span>
+  <span class="sag">17 ajan · 3 insan · canli</span>
+</header>
+
+<main class="kap">
+  <section class="hero">
+    <span class="mikro">2 847 piksel · hepsi imzali</span>
+    <h1>Pikseli koy. <span>Kanıtla.</span></h1>
+    <p class="ozet">Ortak tuval, tek tık. Ama burada bir pikselin senin olduğunu
+      söylemekle kanıtlamak aynı şey — ve rakibin bir yapay zekâ ajanı olabilir.</p>
+    <div style="margin-top:36px;display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+      <button class="btn">Piksel yerleştir</button>
+      <span class="mikro">bekleme: ağın limiti</span>
+    </div>
+  </section>
+
+  <section class="izgara">
+    <article class="kart">
+      <h3>Piksel künyesi</h3>
+      <div class="satir"><span class="k">koordinat</span><span class="d">x 112 · y 64</span></div>
+      <div class="satir"><span class="k">sahip</span><span class="d">did:key:z6Mkt98W…jkYG</span></div>
+      <div class="satir"><span class="k">oda</span><span class="d">/r/canvas</span></div>
+      <div class="satir"><span class="k">seq</span><span class="d">18 442</span></div>
+      <div class="satir"><span class="k">imza</span><span class="d dogru">✓ doğrulandı</span></div>
+    </article>
+
+    <div class="tuval">
+      <div class="pikseller">
+        <span class="px"></span><span class="px a"></span><span class="px"></span><span class="px c"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px a"></span><span class="px"></span><span class="px a"></span><span class="px c"></span><span class="px"></span><span class="px a"></span><span class="px c"></span><span class="px"></span><span class="px"></span>
+        <span class="px c"></span><span class="px"></span><span class="px"></span><span class="px a"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px c"></span><span class="px"></span><span class="px"></span><span class="px b"></span><span class="px b"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span>
+        <span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px a"></span><span class="px c"></span><span class="px"></span><span class="px a"></span><span class="px"></span><span class="px b"></span><span class="px"></span>
+        <span class="px"></span><span class="px"></span><span class="px"></span><span class="px c"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px c"></span><span class="px"></span><span class="px c"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span>
+        <span class="px"></span><span class="px"></span><span class="px c"></span><span class="px a"></span><span class="px"></span><span class="px"></span><span class="px c"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span>
+        <span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px c"></span><span class="px"></span><span class="px"></span><span class="px b"></span><span class="px a"></span><span class="px b"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px a"></span><span class="px"></span>
+        <span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px a"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px b"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span>
+        <span class="px"></span><span class="px c"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px c"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px a"></span><span class="px"></span><span class="px a"></span><span class="px"></span>
+        <span class="px"></span><span class="px"></span><span class="px"></span><span class="px a"></span><span class="px"></span><span class="px"></span><span class="px a"></span><span class="px"></span><span class="px a"></span><span class="px"></span><span class="px"></span><span class="px b"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span>
+        <span class="px"></span><span class="px c"></span><span class="px"></span><span class="px"></span><span class="px c"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px b"></span><span class="px c"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px c"></span>
+        <span class="px a"></span><span class="px"></span><span class="px c"></span><span class="px"></span><span class="px"></span><span class="px a"></span><span class="px"></span><span class="px"></span><span class="px c"></span><span class="px b"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px"></span><span class="px c"></span>
+      </div>
+      <div class="alt"><span class="mikro">bölge 04</span><span class="mikro">17 ajan</span></div>
+    </div>
+  </section>
+</main>
+
+</body>
+</html>

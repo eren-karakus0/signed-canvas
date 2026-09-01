@@ -1,0 +1,261 @@
+/* Pan and zoom, and the one loop that paints.
+ *
+ * The scene bitmap is the only thing blitted, so a frame costs one drawImage plus the
+ * hover mark. Frames are requested on change rather than continuously: the identity asks
+ * for roughly a quarter of the time at rest, and a canvas that repaints while nobody is
+ * touching it is a canvas that drains a laptop for no reason.
+ */
+
+import { BUF_H, BUF_W, MAX_CONTEST, N, PAD, TH, TW, cellTop } from "./projection.ts";
+import type { Scene } from "./scene.ts";
+
+const MIN_SCALE = 0.35;
+const MAX_SCALE = 3;
+/** Pointer travel, in CSS pixels, above which a press is a drag and not a click. */
+const DRAG_SLOP = 4;
+
+export interface ViewEvents {
+  onHover(cell: number | null): void;
+  onActivate(cell: number): void;
+}
+
+export class View {
+  private ctx: CanvasRenderingContext2D;
+  private dpr = 1;
+  private scale = 1;
+  private tx = 0;
+  private ty = 0;
+  private hovered: number | null = null;
+  private frameQueued = false;
+  /** Set while the pointer is down and past the slop threshold. */
+  private dragging = false;
+  private pressed = false;
+  private pressX = 0;
+  private pressY = 0;
+  /** Once the player has framed the canvas themselves, a resize must not undo it. */
+  private userFramed = false;
+  private accentColour = "#0B8FA8";
+
+  private readonly canvas: HTMLCanvasElement;
+  private readonly scene: Scene;
+  private readonly events: ViewEvents;
+
+  constructor(canvas: HTMLCanvasElement, scene: Scene, events: ViewEvents) {
+    this.canvas = canvas;
+    this.scene = scene;
+    this.events = events;
+    const g = canvas.getContext("2d", { alpha: false });
+    if (!g) throw new Error("2D canvas context unavailable");
+    this.ctx = g;
+
+    this.readAccent();
+    this.resize();
+    this.fit();
+    this.bind();
+  }
+
+  /* The crosshair is the identity's shape signature and must come from the token, not from
+     a literal — the render is canvas, so `var()` cannot be used directly. */
+  private readAccent(): void {
+    const v = getComputedStyle(document.body).getPropertyValue("--current-color-40").trim();
+    if (v) this.accentColour = v;
+  }
+
+  resize(): void {
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const r = this.canvas.getBoundingClientRect();
+    this.canvas.width = Math.max(1, Math.round(r.width * this.dpr));
+    this.canvas.height = Math.max(1, Math.round(r.height * this.dpr));
+    // A scale computed for the old box leaves the canvas cropped in the new one. Re-framing
+    // is only safe while the player has not framed it themselves.
+    if (this.userFramed) this.request();
+    else this.fit();
+  }
+
+  /** Frame the whole canvas with a margin, and centre it. */
+  fit(): void {
+    const r = this.canvas.getBoundingClientRect();
+    // Fit to the drawn content, which is the buffer inset by PAD on every side — fitting to
+    // the buffer itself wastes 40px of scale on padding that is never painted.
+    const s = Math.min(r.width / (BUF_W - PAD), r.height / (BUF_H - PAD));
+    this.setScale(s, r.width / 2, r.height / 2, true);
+    this.tx = (r.width - BUF_W * this.scale) / 2;
+    this.ty = (r.height - BUF_H * this.scale) / 2;
+    this.userFramed = false;
+    this.request();
+  }
+
+  private setScale(next: number, anchorX: number, anchorY: number, silent = false): void {
+    const clamped = Math.min(MAX_SCALE, Math.max(MIN_SCALE, next));
+    if (clamped === this.scale) return;
+    // Keep the buffer point under the anchor fixed, so zoom follows the cursor.
+    const bx = (anchorX - this.tx) / this.scale;
+    const by = (anchorY - this.ty) / this.scale;
+    this.scale = clamped;
+    this.tx = anchorX - bx * clamped;
+    this.ty = anchorY - by * clamped;
+    if (!silent) this.request();
+  }
+
+  screenToBuffer(clientX: number, clientY: number): { bx: number; by: number } {
+    const r = this.canvas.getBoundingClientRect();
+    return {
+      bx: (clientX - r.left - this.tx) / this.scale,
+      by: (clientY - r.top - this.ty) / this.scale,
+    };
+  }
+
+  private bind(): void {
+    const c = this.canvas;
+
+    c.addEventListener("pointerdown", (e) => {
+      c.setPointerCapture(e.pointerId);
+      this.pressed = true;
+      this.dragging = false;
+      this.pressX = e.clientX;
+      this.pressY = e.clientY;
+    });
+
+    c.addEventListener("pointermove", (e) => {
+      if (this.pressed) {
+        const dx = e.clientX - this.pressX;
+        const dy = e.clientY - this.pressY;
+        if (!this.dragging && Math.hypot(dx, dy) > DRAG_SLOP) this.dragging = true;
+        if (this.dragging) {
+          this.userFramed = true;
+          this.tx += e.movementX;
+          this.ty += e.movementY;
+          this.request();
+          return;
+        }
+      }
+      const { bx, by } = this.screenToBuffer(e.clientX, e.clientY);
+      const cell = this.scene.pick(bx, by);
+      if (cell !== this.hovered) {
+        this.hovered = cell;
+        this.events.onHover(cell);
+        this.request();
+      }
+    });
+
+    const release = (e: PointerEvent): void => {
+      if (!this.pressed) return;
+      this.pressed = false;
+      if (this.dragging) {
+        this.dragging = false;
+        return;
+      }
+      const { bx, by } = this.screenToBuffer(e.clientX, e.clientY);
+      const cell = this.scene.pick(bx, by);
+      if (cell !== null) this.events.onActivate(cell);
+    };
+    c.addEventListener("pointerup", release);
+    c.addEventListener("pointercancel", () => {
+      this.pressed = false;
+      this.dragging = false;
+    });
+
+    c.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        const r = c.getBoundingClientRect();
+        const factor = Math.exp(-e.deltaY * 0.0015);
+        this.userFramed = true;
+        this.setScale(this.scale * factor, e.clientX - r.left, e.clientY - r.top);
+      },
+      { passive: false },
+    );
+
+    c.addEventListener("pointerleave", () => {
+      if (this.hovered !== null) {
+        this.hovered = null;
+        this.events.onHover(null);
+        this.request();
+      }
+    });
+
+    // The stage can change size without the window doing so — a font landing, a breakpoint,
+    // a rotated phone — so observe the element rather than the window.
+    new ResizeObserver(() => this.resize()).observe(this.canvas);
+  }
+
+  request(): void {
+    if (this.frameQueued) return;
+    this.frameQueued = true;
+    requestAnimationFrame(() => {
+      this.frameQueued = false;
+      this.paint();
+    });
+  }
+
+  /** One blit plus the hover mark. Exposed so the benchmark can drive frames directly. */
+  paint(): void {
+    const g = this.ctx;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = getComputedStyle(document.body).getPropertyValue("--current-color-20") || "#FBFDFD";
+    g.fillRect(0, 0, w, h);
+
+    const s = this.scale * this.dpr;
+    g.setTransform(s, 0, 0, s, this.tx * this.dpr, this.ty * this.dpr);
+    g.drawImage(this.scene.bitmap, 0, 0, BUF_W, BUF_H);
+
+    if (this.hovered !== null) this.drawHoverMark(g);
+  }
+
+  private drawHoverMark(g: CanvasRenderingContext2D): void {
+    const cell = this.hovered!;
+    const cx = cell % N;
+    const cy = Math.floor(cell / N);
+    const contest = Math.min(this.scene.contestAt(cell), MAX_CONTEST);
+    const { x, y } = cellTop(cx, cy, contest);
+
+    // The shape signature: a crosshair, never a rounded highlight. The arms break either
+    // side of the tile rather than crossing it, so the mark reads as an instrument sight
+    // and never covers the colour the player is about to judge.
+    const arm = TW * 1.5;
+    const gapX = TW * 0.62;
+    const gapY = TH * 1.25;
+    const midY = y + TH / 2;
+    g.lineWidth = Math.max(1, 1.5 / this.scale);
+    g.strokeStyle = this.accentColour;
+    g.beginPath();
+    g.moveTo(x - gapX - arm, midY);
+    g.lineTo(x - gapX, midY);
+    g.moveTo(x + gapX, midY);
+    g.lineTo(x + gapX + arm, midY);
+    g.moveTo(x, midY - gapY - arm / 2);
+    g.lineTo(x, midY - gapY);
+    g.moveTo(x, midY + gapY);
+    g.lineTo(x, midY + gapY + arm / 2);
+    g.stroke();
+
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + TW / 2, y + TH / 2);
+    g.lineTo(x, y + TH);
+    g.lineTo(x - TW / 2, y + TH / 2);
+    g.closePath();
+    g.stroke();
+  }
+
+  /** The cell under the pointer, or null. Read after an async lookup to check the pointer
+   *  has not moved on — painting a stale record would attribute the wrong cell. */
+  get hoveredCell(): number | null {
+    return this.hovered;
+  }
+
+  get currentScale(): number {
+    return this.scale;
+  }
+
+  /** Benchmark hook: drive pan and zoom without synthesising pointer events. */
+  setViewport(scale: number, tx: number, ty: number): void {
+    this.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+    this.tx = tx;
+    this.ty = ty;
+  }
+}

@@ -1,0 +1,41 @@
+[Unit]
+Description=Signed Canvas — follow the canvas room and archive it
+Documentation=https://github.com/eren-karakus0/signed-canvas
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/flop/canvas
+ExecStart=/usr/bin/python3 /root/flop/canvas/ingest.py --room fplace --archive /root/flop/canvas/fplace.db
+Restart=always
+RestartSec=10
+# The loop is a poller with backoff, so a crash loop would hammer a service that is already
+# shedding load. Give up for a while instead of retrying forever at speed.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+# It reads one URL and writes one directory. Nothing else on this box is its business —
+# flop-agent, alertbot and kartel-ca-watcher all live here too.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# ProtectHome is deliberately off. It hides /root from the unit, and on this host the
+# service's own data lives at /root/flop/canvas — with it on, systemd refuses the
+# WorkingDirectory before Python ever starts (status=200/CHDIR). ProtectSystem=strict plus
+# the single ReadWritePaths below is what actually confines this service: everything outside
+# that one directory is read-only to it.
+ProtectHome=false
+ReadWritePaths=/root/flop/canvas
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+MemoryMax=300M
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=canvas-ingest
+
+[Install]
+WantedBy=multi-user.target

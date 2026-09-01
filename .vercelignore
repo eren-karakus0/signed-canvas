@@ -1,0 +1,14 @@
+# The deployment needs the client and the proxy. Everything else in this repository is the
+# archive, the agent tools, the tests and the specs — none of which run here, and all of which
+# cost upload time on every deploy.
+server/
+agents/
+bench/
+docs/
+test/
+scripts/
+shots/
+dist-bench/
+*.png
+*.html
+!public/*.html

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signed Canvas</title>
+<meta name="description" content="A pixel canvas where every placement is a signed did:key write.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- One link per family: a multi-family request drops the second family silently. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<!-- Theme carrier: fixed position, colour changes with section, never moves. -->
+<aside class="ruler" aria-hidden="true">
+  <span class="ruler__tick"></span>
+  <span class="ruler__name">SIGNED&nbsp;CANVAS</span>
+  <span class="ruler__tick"></span>
+</aside>
+
+<main class="shell">
+  <!-- The canvas is the hero, so the header stays a band rather than a landing hero:
+       every pixel of height it takes comes out of the thing people came to look at. -->
+  <header class="head">
+    <div class="head__left">
+      <p class="micro">signed canvas</p>
+      <h1>Every pixel is signed.</h1>
+      <!-- Above the fold and beside the claim, not in a footer. A page that says "every
+           pixel is signed" next to a did:key reads like a token project to someone
+           skimming, and the correction has to arrive before that impression does. -->
+      <p class="disclaim">
+        A demonstration of signed identity on a public message service.
+        <strong>No token, nothing for sale</strong>, and not affiliated with Flop&nbsp;Labs.
+      </p>
+    </div>
+    <div class="head__right">
+      <p class="micro" id="provenance">sample data · not yet reading the room</p>
+      <p class="head__stat"><span id="r-painted">—</span> <span>placed</span></p>
+    </div>
+  </header>
+
+  <section class="stage" aria-label="The canvas">
+    <canvas id="canvas" role="img"
+            aria-label="A 64 by 64 pixel canvas drawn in axonometric projection"></canvas>
+    <div class="stage__corner" aria-hidden="true"></div>
+    <button class="reset" id="reset" type="button">reset view</button>
+
+    <!-- Blocks placement on the visit where the key is created. Friction, once, on purpose. -->
+    <div class="gate" id="gate" role="dialog" aria-labelledby="gate-title" hidden>
+      <div class="gate__panel">
+        <p class="micro">this key is yours alone</p>
+        <h2 id="gate-title">Nobody can give it back.</h2>
+        <p>A key was just generated in this browser. It is not an account. There is no
+          password, no email, no recovery.</p>
+        <ul>
+          <li>It lives in this browser's storage, in plain text, on this device only.</li>
+          <li>Clearing site data destroys it. So does a private window closing.</li>
+          <li>Pixels you sign stay in the room forever, attributed to it.</li>
+        </ul>
+        <div class="gate__actions">
+          <button type="button" class="btn btn--accent" data-ack-export>Copy the seed, then continue</button>
+          <button type="button" class="btn" data-ack>I understand — continue</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <div class="ramp" id="ramp" role="radiogroup" aria-label="Colour, hot to cold"></div>
+    <div class="ramp__ends" aria-hidden="true"><span>hot · 01</span><span>15 · cold</span></div>
+    <div class="ident" id="identity">
+      <span class="ident__label">key</span>
+      <code data-did title="">—</code>
+      <button type="button" class="link" data-export>export</button>
+      <button type="button" class="link" data-import>import</button>
+      <button type="button" class="link link--warn" data-forget>forget</button>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <dl class="readout" id="readout">
+      <div><dt>cell</dt><dd id="r-cell">—</dd></div>
+      <div><dt>step</dt><dd id="r-step">—</dd></div>
+      <div><dt>contested</dt><dd id="r-contest">—</dd></div>
+      <div><dt>owner</dt><dd id="r-owner">—</dd></div>
+      <div><dt>basis</dt><dd id="r-basis">—</dd></div>
+    </dl>
+    <div class="proof">
+      <button type="button" class="link" id="proof" disabled>copy proof</button>
+      <span class="proof__hint" id="proof-hint">hover a painted cell</span>
+    </div>
+  </footer>
+</main>
+
+<script type="module" src="./main.js"></script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+[Unit]
+Description=Signed Canvas — serve the archive
+Documentation=https://github.com/eren-karakus0/signed-canvas
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/flop/canvas
+# Loopback only. ADR 0001 opened no port on this host; cloudflared reaches the service here
+# and is the only thing that does. Changing this address is a decision, not a tweak.
+ExecStart=/usr/bin/python3 /root/flop/canvas/app.py --archive /root/flop/canvas/fplace.db --host 127.0.0.1 --port 8787
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# ProtectHome is deliberately off. It hides /root from the unit, and on this host the
+# service's own data lives at /root/flop/canvas — with it on, systemd refuses the
+# WorkingDirectory before Python ever starts (status=200/CHDIR). ProtectSystem=strict plus
+# the single ReadWritePaths below is what actually confines this service: everything outside
+# that one directory is read-only to it.
+ProtectHome=false
+ReadWritePaths=/root/flop/canvas
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+MemoryMax=300M
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=canvas-api
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,36 @@
+[Unit]
+Description=Signed Canvas — quick tunnel to the archive (TEMPORARY, ephemeral hostname)
+Documentation=file:///root/flop/canvas-deploy/deploy/TUNNEL.md
+After=network-online.target canvas-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# A *quick* tunnel: no Cloudflare account, no domain, no credentials on this box. The
+# hostname is assigned by Cloudflare and is DIFFERENT EVERY TIME THIS UNIT STARTS.
+#
+# That is the whole reason this is marked temporary. The client is configured with a literal
+# URL, so a restart here silently points the deployed client at a hostname that no longer
+# exists. Restart=no makes that failure loud instead: the tunnel stays down until someone
+# looks, rather than coming back at an address nobody was told about.
+#
+# The permanent form is a named tunnel with a hostname in a Cloudflare zone — see TUNNEL.md.
+ExecStart=/usr/bin/cloudflared tunnel --url http://127.0.0.1:8787 --no-autoupdate
+Restart=no
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=false
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+MemoryMax=200M
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=canvas-tunnel
+
+[Install]
+WantedBy=multi-user.target
