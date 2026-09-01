@@ -48,6 +48,19 @@ let roomHead = 0;
 /** Cells with a write in flight. A second click would race its own reconcile. */
 const inFlight = new Set<number>();
 
+/* One placement at a time, then a pause.
+ *
+ * Clicking faster than the service answers produced real refusals on the deployed site: 503s
+ * from its load shedder, and a `400 nonce … is not greater than …` when an attempt backing
+ * off was overtaken by a later placement. The nonce race is fixed at its source in
+ * `net/room.ts`, which re-signs every attempt — this is the separate, deliberate choice that
+ * a person should not be able to spend their whole write budget in four seconds.
+ *
+ * Ten seconds is not derived from the rate limit (300 writes/minute would allow far more).
+ * It is a pace, chosen so a canvas is composed rather than sprayed. */
+const PLACE_COOLDOWN_MS = 10_000;
+let readyToPlaceAt = 0;
+
 function say(message: string, tone: "info" | "ok" | "warn" = "info"): void {
   statusLine.textContent = message;
   statusLine.dataset["tone"] = tone;
@@ -220,6 +233,19 @@ async function placePixel(cx: number, cy: number): Promise<void> {
   // was accepted, and placing was refused rather than showing a mark that might not exist.
   // The service now answers every origin, so the room is reachable directly and a missing
   // relay costs a round trip, not the feature.
+  // One at a time. Concurrent placements each take a nonce, and the one that answers last is
+  // holding the lower number — handled correctly now, but there is no reason to create the
+  // race, and a person clicking into a queue cannot tell which click did what.
+  if (inFlight.size > 0) {
+    say("one pixel at a time — the last one is still being written", "warn");
+    return;
+  }
+  const waitMs = readyToPlaceAt - Date.now();
+  if (waitMs > 0) {
+    say(`${Math.ceil(waitMs / 1000)}s before the next pixel`, "warn");
+    return;
+  }
+
   const relay = relayUrl();
   const index = cy * N + cx;
   if (inFlight.has(index)) return;
@@ -246,7 +272,10 @@ async function placePixel(cx: number, cy: number): Promise<void> {
     identity: panel.current,
     room: ROOM,
     text,
-    nonce: nonces.next(),
+    // Handed as a function so every retry takes a fresh one. A nonce is spent when it is
+    // issued, and a placement that lands while an earlier attempt is backing off leaves that
+    // attempt holding a number the service will no longer accept.
+    nextNonce: () => nonces.next(),
     sinceSeq: roomHead,
     ...(relay === undefined ? {} : { relayUrl: relay }),
     onRetry: (attempt, reason) => say(`${reason} — retry ${attempt}`),
@@ -277,6 +306,7 @@ async function placePixel(cx: number, cy: number): Promise<void> {
       inspectCell(index);
     }
     roomHead = Math.max(roomHead, outcome.seq);
+    readyToPlaceAt = Date.now() + PLACE_COOLDOWN_MS;
     // Name the lane when it was not the relay. The pixel is equally placed and equally
     // provable either way — we hold the signature — but it says why the archive has not
     // caught up yet, which is otherwise an unexplained few seconds.
