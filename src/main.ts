@@ -269,7 +269,13 @@ async function placePixel(cx: number, cy: number): Promise<void> {
       payload: `${ROOM}|${outcome.nonce}|${outcome.text}`,
       sig: outcome.signature,
     });
-    if (view.hoveredCell === index) inspectCell(index);
+    // Both halves of the readout, not just the ownership half. The pointer has not moved, so
+    // nothing else will refresh the step and the contest count, and the row would go on
+    // reading "step empty" beside the owner of a pixel that is plainly on screen.
+    if (view.hoveredCell === index) {
+      showCell(index);
+      inspectCell(index);
+    }
     roomHead = Math.max(roomHead, outcome.seq);
     // Name the lane when it was not the relay. The pixel is equally placed and equally
     // provable either way — we hold the signature — but it says why the archive has not
