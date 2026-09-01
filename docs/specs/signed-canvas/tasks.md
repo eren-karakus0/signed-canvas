@@ -714,6 +714,57 @@ deliberately `Restart=no` — so a tunnel that dies stays dead, silently, and th
 "the archive could not be read" until someone looks. Monitoring it is the next thing worth
 doing.
 
+**T-19 · What the first real session found** — ✅ **DONE 2026-09-02**
+
+Someone placed several dozen pixels on the deployed site and reported what happened. None of
+it was visible from here, and four of the five were things no test could have asked about.
+
+**The canvas was flat, and had always been on reload.** Elevation comes from how many times a
+cell has been overwritten, and the snapshot carried one colour per cell and nothing else — so
+the count could not be reconstructed and every tower collapsed to a square. Worse, a live
+tower took the newest colour on every level, so painting over a stack repainted the whole
+building. Two symptoms, one missing fact. Fixed with a third snapshot plane carrying the
+levels below each top; see the commit for the layout and why the top stays out of it.
+
+**A nonce could go backwards.** `place()` signed once and retried with the same nonce, so an
+attempt backing off while another placement landed was refused:
+
+    400 nonce 1788299171666 is not greater than 1788299177324, the last one this key used
+
+The gap between those two numbers is exactly the backoff schedule. Every test here placed one
+pixel at a time, which is the one thing a person does not do. Each attempt now signs its own
+nonce — and a placement recovered from the room reports the *room's* nonce and signature,
+because the attempt that landed is not necessarily the one still in hand.
+
+**Ctrl+scroll walked the canvas into a corner.** `tx`/`ty` anchor the buffer to the box's
+top-left, and a resize left them alone; browser zoom resizes the box on every notch. Now the
+middle stays in the middle.
+
+**The controls were bigger than the canvas.** Measured rather than adjusted by eye: the footer
+was 191px at every viewport and the header 132px, so a 1366×768 laptop gave the canvas 366px —
+48% of the screen. Two rows instead of six, and swatches sized rather than stretched, took the
+footer to 78px and the canvas to 62%. Checked at seven widths down to 390px.
+
+**"44 OF 39 WITNESSED".** A ratio above one, printed in the header: witnessed *placements*
+rendered against occupied *cells*. Both now counted from the same decoded plane.
+
+Also, at the reporter's request: one placement at a time and a ten-second pause between them.
+That is a pace, not a rate limit — the service would allow far more — and it is separate from
+the nonce fix, which is what actually made rapid placing correct.
+
+**T-20 · Watch the tunnel** — ✅ **DONE 2026-09-02**
+
+Publishing created a dependency nothing was looking at, recorded as a risk in T-18 and closed
+here. `canvas-tunnel-watch.timer` checks every ten minutes, in the order that makes the
+diagnosis: the deployed site's own `/api/health` first, then the tunnel unit, then the
+hostname cloudflared is advertising, then the archive on loopback. The common failure — data
+fine, address stale — produces an alert carrying the new hostname and the three commands that
+fix it.
+
+Both branches were exercised on the box before the timer was enabled: the failure diagnosis
+against a deliberately dead site URL, and one labelled test message through Telegram. A
+notifier nobody has watched work is not monitoring.
+
 **T-12 · Reduced motion, contrast, mobile legibility** — serves NFR-8, NFR-9
 *Done when:* `sagla.py` is clean and screenshots at 390 px wide are legible.
 *Depends on:* T-7.
