@@ -428,6 +428,24 @@ class Archive:
         for row in self._db.execute(query):
             yield Row(**dict(row))
 
+    def tower_rows(self, depth: int) -> Iterator[Row]:
+        """The last ``depth`` placements in every occupied cell, oldest first per cell.
+
+        What `cells()` returns is the canvas as it stands; this is the canvas as it got that
+        way, bounded. A cell contested a thousand times still yields only the levels a tower
+        can show, so the cost is the number of *occupied* cells rather than the length of the
+        room's history.
+        """
+        query = (
+            "SELECT seq, ts, did, nonce, text, cx, cy, step, sig FROM ("
+            "  SELECT *, ROW_NUMBER() OVER (PARTITION BY cy, cx ORDER BY seq DESC) AS rn"
+            "  FROM placement"
+            ") WHERE rn <= ? ORDER BY cy, cx, seq"
+        )
+        for row in self._db.execute(query, (depth,)):
+            fields = {k: v for k, v in dict(row).items() if k != "rn"}
+            yield Row(**fields)
+
     def since(self, seq: int, limit: int = 1000) -> list[Row]:
         """Placements newer than ``seq``, oldest first — the delta a client applies."""
         query = (

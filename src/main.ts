@@ -348,7 +348,12 @@ async function placePixel(cx: number, cy: number): Promise<void> {
  */
 async function loadCanvas(base: string): Promise<void> {
   const state = await snapshot(base);
-  for (const cell of state.cells) grid.place(cell.cx, cell.cy, cell.step);
+  // `restore`, not `place`: the snapshot carries each cell's whole column, and replaying it
+  // one placement at a time would rebuild the tower from the top colour alone — which is how
+  // every reload used to flatten the canvas.
+  for (const cell of state.cells) {
+    grid.restore(cell.cx, cell.cy, cell.step, cell.tower ?? []);
+  }
   roomHead = state.seq;
   scene.drawAll();
   view.fit();

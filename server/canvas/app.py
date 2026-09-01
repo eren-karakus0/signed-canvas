@@ -52,7 +52,7 @@ import urllib.request
 
 from archive import Archive, ArchiveError
 from placement import parse as parse_placement
-from snapshot import encode, pack
+from snapshot import MAX_STACK, encode, pack, pack_stack
 from verifier import (
     DID_PATTERN,
     SIGNATURE_PATTERN,
@@ -323,14 +323,19 @@ class Handler(BaseHTTPRequestHandler):
     def _snapshot(self) -> None:
         with self._open() as archive:
             rows = list(archive.cells())
+            # The levels below each top, so a reload draws the towers that are there rather
+            # than flattening the canvas to its newest colours.
+            towers = list(archive.tower_rows(MAX_STACK + 1))
             stats = archive.stats()
         cells, witnessed = pack(rows)
+        stack = pack_stack(towers)
         self._send(
             200,
             {
                 "seq": stats.last_seq,
                 "cells": encode(cells),
                 "witnessed": encode(witnessed),
+                "stack": encode(stack),
                 "painted": len(rows),
                 "signers": stats.signers,
                 "witnessed_count": stats.witnessed,

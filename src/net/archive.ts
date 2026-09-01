@@ -13,6 +13,12 @@
 const CELL_BYTES = 2048;
 const WITNESS_BYTES = 512;
 const N = 64;
+/* Levels a tower carries beneath its top. Mirrors `MAX_CONTEST` in projection.ts and
+   `MAX_STACK` in snapshot.py — three names for one number, because the plane is laid out on
+   the server, decoded here and drawn there, and a disagreement between any two of them draws
+   a tower out of the wrong colours. */
+const MAX_CONTEST = 8;
+const STACK_BYTES = (N * N * MAX_CONTEST) / 2;
 
 export class ArchiveError extends Error {
   override readonly name = "ArchiveError";
@@ -23,6 +29,14 @@ export interface Cell {
   readonly cy: number;
   readonly step: number;
   readonly witnessed: boolean;
+  /**
+   * The colours under `step`, bottom first, at most `MAX_CONTEST` of them.
+   *
+   * Empty for a cell placed once, and for every cell when the archive is older than the
+   * stack plane. A delta placement carries no tower: the client already holds the column it
+   * is landing on, and `Grid.place` pushes onto it.
+   */
+  readonly tower?: readonly number[];
 }
 
 export interface Snapshot {
@@ -70,6 +84,7 @@ export async function snapshot(baseUrl: string): Promise<Snapshot> {
     seq: number;
     cells: string;
     witnessed: string;
+    stack?: string;
     painted: number;
     signers: number;
     witnessed_count: number;
@@ -79,25 +94,48 @@ export async function snapshot(baseUrl: string): Promise<Snapshot> {
   const cellBytes = decode(body.cells, CELL_BYTES);
   const witnessBytes = decode(body.witnessed, WITNESS_BYTES);
 
+  // Optional so an archive that predates the plane still loads; those canvases simply come
+  // back flat, which is what they did before it existed.
+  const stackBytes =
+    typeof body.stack === "string" ? decode(body.stack, STACK_BYTES) : undefined;
+
   const cells: Cell[] = [];
   for (let index = 0; index < N * N; index++) {
     const byte = cellBytes[index >> 1]!;
     const step = index % 2 === 0 ? byte >> 4 : byte & 0x0f;
     if (step === 0) continue;
+
+    const tower: number[] = [];
+    if (stackBytes) {
+      for (let level = 0; level < MAX_CONTEST; level++) {
+        const nibble = index * MAX_CONTEST + level;
+        const packed = stackBytes[nibble >> 1]!;
+        const colour = nibble % 2 === 0 ? packed >> 4 : packed & 0x0f;
+        // 0 terminates. Reading past it would build a tower with a hole in it.
+        if (colour === 0) break;
+        tower.push(colour);
+      }
+    }
+
     cells.push({
       cx: index % N,
       cy: Math.floor(index / N),
       step,
       witnessed: (witnessBytes[index >> 3]! & (1 << index % 8)) !== 0,
+      tower,
     });
   }
 
+  /* Both counted from the plane that was just decoded, so they describe the same thing.
+     The archive's own `witnessed_count` counts witnessed *placements* while `painted` counts
+     occupied *cells*, and rendering one against the other put "44 OF 39 WITNESSED" in the
+     header — a ratio above one, which is not a rounding error but a category error. */
   return {
     seq: Number(body.seq) || 0,
     cells,
-    painted: Number(body.painted) || cells.length,
+    painted: cells.length,
     signers: Number(body.signers) || 0,
-    witnessed: Number(body.witnessed_count) || 0,
+    witnessed: cells.reduce((n, cell) => n + (cell.witnessed ? 1 : 0), 0),
     lag: Number(body.lag) || 0,
   };
 }

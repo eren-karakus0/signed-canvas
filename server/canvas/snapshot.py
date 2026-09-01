@@ -1,17 +1,29 @@
 """Packing the canvas into the bytes a client loads first.
 
-Two planes, both indexed by ``cy * N + cx``:
+Three planes, all indexed by ``cy * N + cx``:
 
-    cells      4 bits per cell, two cells per byte      2,048 bytes
-    witnessed  1 bit per cell                             512 bytes
+    cells      4 bits per cell, two cells per byte       2,048 bytes
+    witnessed  1 bit per cell                              512 bytes
+    stack      4 bits × MAX_STACK levels per cell        16,384 bytes
 
-The second plane exists because of the proof problem recorded in ``archive.py``: a client
-that received only colours would have to render every pixel as though it were equally
-proven, and it is not. Whether a pixel is witnessed or merely attested has to survive the
-packing, or the interface cannot tell the truth about what it is showing.
+``witnessed`` exists because of the proof problem recorded in ``archive.py``: a client that
+received only colours would have to render every pixel as though it were equally proven, and
+it is not. Whether a pixel is witnessed or merely attested has to survive the packing, or the
+interface cannot tell the truth about what it is showing.
 
-2,560 bytes together — 3,414 base64url characters, still one small response, and 386× smaller
-than replaying the equivalent room JSON.
+``stack`` exists because the canvas is not flat. A cell that has been overwritten is drawn as
+a column, one level per overwrite, and each level keeps the colour that was there — the tower
+is the cell's history standing up. Without this plane a client could only learn that history
+by watching it happen: **every tower collapsed to a flat square on reload**, and every level
+took the newest colour, because the top colour was the only thing the snapshot carried.
+
+It holds the levels *below* the top, oldest first, and 0 terminates. The top itself stays in
+``cells``, so the two planes never disagree about the same fact and a client that ignores
+``stack`` renders exactly what it rendered before.
+
+18,944 bytes together. That is 7× the old snapshot and still one small gzipped response — the
+alternative is a client replaying the room's whole history to draw a shape the server already
+knows.
 """
 
 from __future__ import annotations
@@ -24,9 +36,72 @@ CELLS = N * N
 CELL_BYTES = CELLS // 2
 WITNESS_BYTES = CELLS // 8
 
+# Levels a tower can show beneath its top. The client caps elevation at the same number
+# (`MAX_CONTEST` in projection.ts): past it the column would leave the viewport, so a cell
+# contested more often keeps its most recent levels and forgets the older ones. The two
+# constants have to agree, and the round-trip test is what says they do.
+MAX_STACK = 8
+STACK_BYTES = CELLS * MAX_STACK // 2
+
 
 class SnapshotError(Exception):
     """The canvas could not be packed or unpacked."""
+
+
+def pack_stack(rows: Iterable) -> bytes:
+    """Pack each cell's tower — the levels below its top, oldest first.
+
+    Args:
+        rows: every placement worth drawing, in sequence order, with ``cx``, ``cy`` and
+            ``step``. The newest per cell becomes the top and is *not* in this plane; the
+            ``MAX_STACK`` before it become the tower, bottom first.
+
+    Raises:
+        SnapshotError: if a row falls outside the canvas or carries an unpaintable step.
+    """
+    history: dict[int, list[int]] = {}
+    for row in rows:
+        if not (0 <= row.cx < N and 0 <= row.cy < N):
+            raise SnapshotError(f"cell out of bounds: {row.cx},{row.cy}")
+        if not (1 <= row.step <= 15):
+            raise SnapshotError(f"step {row.step} is not paintable")
+        index = row.cy * N + row.cx
+        # Keep one more than the tower needs: the newest is the top, which lives in `cells`.
+        levels = history.setdefault(index, [])
+        levels.append(row.step)
+        if len(levels) > MAX_STACK + 1:
+            del levels[0]
+
+    stack = bytearray(STACK_BYTES)
+    for index, levels in history.items():
+        for level, step in enumerate(levels[:-1]):
+            set_level(stack, index, level, step)
+    return bytes(stack)
+
+
+def set_level(stack: bytearray, index: int, level: int, step: int) -> None:
+    """Write one tower level in place. ``level`` 0 is the bottom.
+
+    Raises:
+        SnapshotError: if the level is outside the tower or the step is unpaintable.
+    """
+    if not (0 <= level < MAX_STACK):
+        raise SnapshotError(f"level {level} is outside the tower (0..{MAX_STACK - 1})")
+    if not (0 <= step <= 15):
+        raise SnapshotError(f"step {step} is not a palette index")
+    nibble = index * MAX_STACK + level
+    byte, high = divmod(nibble, 2)
+    if high == 0:
+        stack[byte] = (stack[byte] & 0x0F) | (step << 4)
+    else:
+        stack[byte] = (stack[byte] & 0xF0) | step
+
+
+def get_level(stack: bytes, index: int, level: int) -> int:
+    """Read one tower level. 0 means the tower does not reach this high."""
+    nibble = index * MAX_STACK + level
+    byte, high = divmod(nibble, 2)
+    return (stack[byte] >> 4) if high == 0 else (stack[byte] & 0x0F)
 
 
 def pack(rows: Iterable) -> tuple[bytes, bytes]:

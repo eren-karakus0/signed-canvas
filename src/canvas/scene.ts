@@ -217,6 +217,41 @@ export class Scene {
     this.drawCellTo(this.pickCtx, cx, cy, true);
   }
 
+  /**
+   * The two visible sides of a column slice, from `top` to `bottom` below the cell's top face.
+   *
+   * Extracted because the pick buffer wants one slice for the whole column and the scene wants
+   * one per level, and the geometry must not drift between them — a pick buffer that disagrees
+   * with what is drawn hands a click to the wrong cell.
+   */
+  private sideQuads(
+    g: CanvasRenderingContext2D,
+    sx: number,
+    sy: number,
+    top: number,
+    bottom: number,
+    left: string,
+    right: string,
+  ): void {
+    g.fillStyle = left;
+    g.beginPath();
+    g.moveTo(sx - TW / 2, sy + TH / 2 + top);
+    g.lineTo(sx, sy + TH + top);
+    g.lineTo(sx, sy + TH + bottom);
+    g.lineTo(sx - TW / 2, sy + TH / 2 + bottom);
+    g.closePath();
+    g.fill();
+
+    g.fillStyle = right;
+    g.beginPath();
+    g.moveTo(sx, sy + TH + top);
+    g.lineTo(sx + TW / 2, sy + TH / 2 + top);
+    g.lineTo(sx + TW / 2, sy + TH / 2 + bottom);
+    g.lineTo(sx, sy + TH + bottom);
+    g.closePath();
+    g.fill();
+  }
+
   private drawCellTo(
     g: CanvasRenderingContext2D,
     cx: number,
@@ -233,24 +268,25 @@ export class Scene {
     const { x: sx, y: sy } = cellTop(cx, cy, contest);
     const id = pick ? encodeId(i) : "";
 
-    if (h > 0) {
-      g.fillStyle = pick ? id : FACE_LEFT[step]!;
-      g.beginPath();
-      g.moveTo(sx - TW / 2, sy + TH / 2);
-      g.lineTo(sx, sy + TH);
-      g.lineTo(sx, sy + TH + h);
-      g.lineTo(sx - TW / 2, sy + TH / 2 + h);
-      g.closePath();
-      g.fill();
-
-      g.fillStyle = pick ? id : FACE_RIGHT[step]!;
-      g.beginPath();
-      g.moveTo(sx, sy + TH);
-      g.lineTo(sx + TW / 2, sy + TH / 2);
-      g.lineTo(sx + TW / 2, sy + TH / 2 + h);
-      g.lineTo(sx, sy + TH + h);
-      g.closePath();
-      g.fill();
+    if (h > 0 && pick) {
+      // One quad per side for the pick buffer. Every level of a cell decodes to the same id,
+      // so slicing it into bands would be the same answer for more fills — and this buffer is
+      // read on every hover.
+      this.sideQuads(g, sx, sy, 0, h, id, id);
+    } else if (h > 0) {
+      // A band per level, each keeping the colour that was there. Drawn top-down so `level`
+      // counts back through the cell's history: the band under the top face is the colour it
+      // covered, and the bottom band is the oldest the tower still remembers.
+      for (let band = 0; band < contest; band++) {
+        const below = this.grid.levelAt(i, contest - 1 - band);
+        const shade = below === EMPTY ? step : below;
+        // Half a pixel of overlap: adjacent quads that share an exact edge leave an
+        // antialiased hairline of the ground colour between them, which reads as a crack in
+        // the tower rather than as the seam it is.
+        const top = band * LIFT;
+        const bottom = (band + 1) * LIFT + (band === contest - 1 ? 0 : 0.5);
+        this.sideQuads(g, sx, sy, top, bottom, FACE_LEFT[shade]!, FACE_RIGHT[shade]!);
+      }
     }
 
     g.fillStyle = pick ? id : PATINA[step]!;
