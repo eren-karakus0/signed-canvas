@@ -1,0 +1,15 @@
+[Unit]
+Description=Check every 10 minutes that the public site can reach the archive
+Documentation=https://github.com/eren-karakus0/signed-canvas
+
+[Timer]
+# Ten minutes is the worst case a visitor sees a broken page before anyone is told. Shorter
+# would mean alerting on the service's ordinary 3-25% shedding rather than on an outage.
+OnBootSec=3min
+OnUnitActiveSec=10min
+AccuracySec=30s
+Persistent=true
+Unit=canvas-tunnel-watch.service
+
+[Install]
+WantedBy=timers.target

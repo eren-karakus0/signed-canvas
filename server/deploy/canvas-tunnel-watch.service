@@ -1,0 +1,33 @@
+[Unit]
+Description=Signed Canvas — is the public site still reaching the archive?
+Documentation=https://github.com/eren-karakus0/signed-canvas
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/flop/canvas
+ExecStart=/usr/bin/python3 /root/flop/canvas/tunnel-watch.py
+
+# It reads two health endpoints, one journal and one config file, and writes one state file.
+# `flop-agent`, `alertbot` and `kartel-ca-watcher` all live on this box and are none of its
+# business.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# Off for the same reason as the other canvas units: the data lives under /root, and with
+# ProtectHome on systemd refuses the WorkingDirectory before Python starts (status=200/CHDIR).
+ProtectHome=false
+ReadWritePaths=/root/flop/canvas
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+MemoryMax=150M
+
+# An exit code of 1 is "degraded, and it said so" — the check worked. Only a crash is a
+# failure of this unit, and treating a real outage as one would bury the alert in noise.
+SuccessExitStatus=0 1
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=canvas-tunnel-watch
