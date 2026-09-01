@@ -1,0 +1,7 @@
+# Everything is LF in the repository. Without this, a clone on Windows checks these out with
+# CRLF and a systemd unit or a shell script copied straight to the Linux host fails in ways
+# that read as anything but a line ending.
+* text=auto eol=lf
+
+# Never touched: they are not text and a normalisation pass would corrupt them.
+*.png binary
