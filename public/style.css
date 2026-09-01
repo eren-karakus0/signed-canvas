@@ -246,9 +246,37 @@ body {
 
 /* ---- foot: the ramp and the readout ----------------------------------------------- */
 
+/* Two rows, not six. The controls were 191px tall at every viewport — more than the canvas
+   got on a 1366x768 laptop — because each block claimed a row of its own. */
 .foot {
   display: grid;
-  gap: var(--s-1);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  column-gap: var(--s-3);
+  row-gap: var(--s-1);
+}
+
+.palette {
+  grid-column: 1;
+}
+
+.foot__side {
+  grid-column: 2;
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.foot__record {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--s-3);
+  row-gap: var(--s-1);
+  border-top: 1px solid var(--current-line);
+  padding-top: var(--s-1);
 }
 
 .ramp {
@@ -256,9 +284,12 @@ body {
   gap: 3px;
 }
 
+/* Sized, not stretched. Fifteen swatches spread across a 1440px viewport were 88px each —
+   a band of colour wider than anything it selects, competing with the canvas for the eye. */
 .ramp button {
-  flex: 1;
-  height: 30px;
+  flex: none;
+  width: 26px;
+  height: 26px;
   border: 1px solid transparent;
   border-radius: var(--radius);
   cursor: pointer;
@@ -307,8 +338,6 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-3);
-  border-top: 1px solid var(--current-line);
-  padding-top: var(--s-2);
   font-family: var(--font-micro);
   font-size: var(--t-micro);
 }
@@ -338,10 +367,9 @@ body {
   align-items: center;
   gap: var(--s-2);
   flex-wrap: wrap;
+  justify-content: flex-end;
   font-family: var(--font-micro);
   font-size: var(--t-micro);
-  border-top: 1px solid var(--current-line);
-  padding-top: var(--s-2);
 }
 
 .ident__label {
@@ -510,7 +538,6 @@ body {
   gap: var(--s-2);
   font-family: var(--font-micro);
   font-size: var(--t-micro);
-  margin-top: var(--s-1);
 }
 
 .proof__hint {
@@ -560,7 +587,27 @@ body {
   /* The stage keeps filling the column. Constraining it to the content's 1.8:1 was tried
      and was worse: it moved the empty space out of the framed stage and onto the page,
      where it reads as a broken layout rather than as room to zoom into. */
+  .foot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .palette,
+  .foot__side {
+    grid-column: 1;
+  }
+
+  .foot__side {
+    justify-items: start;
+  }
+
+  .ident {
+    justify-content: flex-start;
+  }
+
+  /* Touch targets, where the pointer is a fingertip rather than a cursor. */
   .ramp button {
+    flex: 1;
+    width: auto;
     height: 40px;
   }
 

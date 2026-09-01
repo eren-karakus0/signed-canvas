@@ -68,27 +68,36 @@
     </div>
   </section>
 
+  <!-- Three groups on two rows rather than six stacked blocks. The footer was 191px tall at
+       every viewport, which at 1366x768 left the canvas 48% of the screen — the controls were
+       taking more room than the thing they control. -->
   <footer class="foot">
-    <div class="ramp" id="ramp" role="radiogroup" aria-label="Colour, hot to cold"></div>
-    <div class="ramp__ends" aria-hidden="true"><span>hot · 01</span><span>15 · cold</span></div>
-    <div class="ident" id="identity">
-      <span class="ident__label">key</span>
-      <code data-did title="">—</code>
-      <button type="button" class="link" data-export>export</button>
-      <button type="button" class="link" data-import>import</button>
-      <button type="button" class="link link--warn" data-forget>forget</button>
+    <div class="palette">
+      <div class="ramp" id="ramp" role="radiogroup" aria-label="Colour, hot to cold"></div>
+      <div class="ramp__ends" aria-hidden="true"><span>hot · 01</span><span>15 · cold</span></div>
     </div>
-    <p class="status" id="status" role="status" aria-live="polite"></p>
-    <dl class="readout" id="readout">
-      <div><dt>cell</dt><dd id="r-cell">—</dd></div>
-      <div><dt>step</dt><dd id="r-step">—</dd></div>
-      <div><dt>contested</dt><dd id="r-contest">—</dd></div>
-      <div><dt>owner</dt><dd id="r-owner">—</dd></div>
-      <div><dt>basis</dt><dd id="r-basis">—</dd></div>
-    </dl>
-    <div class="proof">
-      <button type="button" class="link" id="proof" disabled>copy proof</button>
-      <span class="proof__hint" id="proof-hint">hover a painted cell</span>
+    <div class="foot__side">
+      <div class="ident" id="identity">
+        <span class="ident__label">key</span>
+        <code data-did title="">—</code>
+        <button type="button" class="link" data-export>export</button>
+        <button type="button" class="link" data-import>import</button>
+        <button type="button" class="link link--warn" data-forget>forget</button>
+      </div>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </div>
+    <div class="foot__record">
+      <dl class="readout" id="readout">
+        <div><dt>cell</dt><dd id="r-cell">—</dd></div>
+        <div><dt>step</dt><dd id="r-step">—</dd></div>
+        <div><dt>contested</dt><dd id="r-contest">—</dd></div>
+        <div><dt>owner</dt><dd id="r-owner">—</dd></div>
+        <div><dt>basis</dt><dd id="r-basis">—</dd></div>
+      </dl>
+      <div class="proof">
+        <button type="button" class="link" id="proof" disabled>copy proof</button>
+        <span class="proof__hint" id="proof-hint">hover a painted cell</span>
+      </div>
     </div>
   </footer>
 </main>
