@@ -649,6 +649,71 @@ build, and `dist/` still 33.1 KB.
 three engines, the build and its budget, and the benchmark including the pick invariant on all
 4,096 cells. It passes.
 
+**T-13 · The honest framing** — ✅ **DONE 2026-09-01**
+
+One line under the title, in body type, above the fold: *"A demonstration of signed identity
+on a public message service. No token, nothing for sale, and not affiliated with Flop Labs."*
+
+Placed beside the claim rather than in a footer for a specific reason: a page that says "every
+pixel is signed" next to a `did:key` reads like a token project to anyone skimming, and the
+correction has to arrive before that impression does. Body type rather than the `micro` label
+style, because it is the one line on the page a person actually has to read.
+
+Contrast checked as composited rather than as tokens: `sagla.py` measures the ink/ground pair
+and this line is the ink at 72% opacity, which is a different colour. **5.70:1**, over the
+4.5:1 body-text floor.
+
+**T-18 · Published** — ✅ **DONE 2026-09-02** — <https://signed-canvas.vercel.app>
+
+Public repository at <https://github.com/eren-karakus0/signed-canvas>, deployed on Vercel with
+a free stable hostname. No domain purchased and no paid service added; the only running cost
+remains the server that was already there.
+
+**The archive's address is no longer a published fact.** The client asks its own origin for
+`/api/*` and `api/proxy.js` forwards it from the server side, reading `ARCHIVE_ORIGIN` from
+the environment. Verified on the deployed site: the tunnel hostname appears **0 times** in the
+page and **0 times** in the bundle. That matters because the archive sits behind a Cloudflare
+*quick* tunnel whose name Cloudflare reassigns on every restart — compiled into a build, that
+name is a broken site waiting for a restart; as an environment variable it is a one-line
+change with no rebuild. Same-origin also removes CORS between the page and our own archive
+entirely.
+
+*The catch-all route was a guess, so it was measured.* `api/[...path].js` matched `/api/health`
+and `/api/a` and 404'd on `/api/a/b` and `/api/cell/20/20` under `vercel dev` — a single-segment
+match wearing catch-all syntax. Replaced with an explicit rewrite in `vercel.json`, which
+states the mapping instead of relying on it.
+
+*The header the fallback depends on was verified through the proxy before deploying, not
+after.* A real signed write posted through `vercel dev` came back `x-relay-upstream: 200` and
+landed at seq 17. Had the proxy dropped that header, every refusal would silently have read as
+"no word from upstream" and a browser would re-send writes the service had already refused.
+
+*Local now matches deployed.* `scripts/local-server.mjs` serves `dist/` and forwards `/api` the
+same way, so screenshots, the benchmark and the end-to-end test all exercise the deployed
+shape. Without it the benchmark would have measured paint work on a canvas that failed to load
+and reported better numbers than the product achieves.
+
+**Driven live, as a person:** the page loads, states what it is, blocks a first placement
+behind the key warning, and placed a signed pixel at **seq 18** — zero unhandled errors.
+
+*And the screenshot of that run found a bug no test had.* The readout said `step empty` beside
+the owner of a pixel plainly on screen: placing refreshed the ownership half of the row and
+not the other half, because the pointer had not moved. Every assertion about that path checked
+the owner line, which was correct.
+
+**Two things left, both needing a browser and neither mine to click:**
+
+- The Vercel GitHub App is not installed on the account, so `vercel git connect` is refused and
+  pushes do not deploy themselves yet. Deploys are `vercel --prod` until it is.
+- `ARCHIVE_ORIGIN` is set for Production and Development but not Preview; this CLI version
+  refuses the non-interactive form. It only matters once the GitHub connection exists.
+
+**And one risk this created:** the public site now depends on a tunnel that nothing watches.
+`flop-watchdog` checks the Technocore identity only, and `canvas-tunnel.service` is
+deliberately `Restart=no` — so a tunnel that dies stays dead, silently, and the site shows
+"the archive could not be read" until someone looks. Monitoring it is the next thing worth
+doing.
+
 **T-12 · Reduced motion, contrast, mobile legibility** — serves NFR-8, NFR-9
 *Done when:* `sagla.py` is clean and screenshots at 390 px wide are legible.
 *Depends on:* T-7.
