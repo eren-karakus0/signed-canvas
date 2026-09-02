@@ -11,13 +11,11 @@ export const EMPTY = 0;
    second family: the main hues, at a saturation the ramp deliberately avoids, so they read
    as additions rather than as more ramp.
 
-   Measured before being believed, in CIEDE2000 (see the palette-extension check recorded in
-   .design/identity.md): closest pair among the additions 13.0, none within 8 of a ramp step,
-   and none within 8 of the accent, the ink or the ground. The last of those caught a real
-   defect — pure white sits 1.1 from the canvas ground, so a white pixel would have been
-   placed and then invisible. */
+   Measured before being believed, in CIEDE2000. The measurement is no longer a note about a
+   measurement — `test/palette.test.ts` recomputes it on every run, which is the only version
+   of "we checked" that stays true after someone edits this file. */
 export const PALETTE: readonly string[] = [
-  "#FBFDFD", // 00 · empty cell, = --current-color-20
+  "#D5E1E7", // 00 · empty cell, = GROUND below
   "#DF9449", // 01 hot
   "#D87A35",
   "#C6602C",
@@ -50,7 +48,7 @@ export const PALETTE: readonly string[] = [
   "#FF5C1A", // 30 bright orange
   "#22D3D3", // 31 cyan
   "#4A3226", // 32 dark brown
-  "#CBD5DA", // 33 pale
+  "#FFFFFF", // 33 white
   "#7C878C", // 34 grey
   "#3D4A50", // 35 slate
 ];
@@ -73,6 +71,17 @@ const darken = (hex: string, k: number): string => {
 export const FACE_LEFT: readonly string[] = PALETTE.map((c) => darken(c, 0.7));
 export const FACE_RIGHT: readonly string[] = PALETTE.map((c) => darken(c, 0.85));
 
-/** The plot paper the drawing sits on. Not part of the ramp. */
-export const GRID_LINE = "#DCE7EB";
-export const GROUND = "#FBFDFD";
+/* The plot paper the drawing sits on. Not part of the ramp.
+
+   The ground used to be `--current-color-20` (#FBFDFD), a near-white surface, and that is why
+   this palette had no white: pure white sits 1.1 from it, so a white pixel would have been
+   placed, signed, counted — and invisible. White is the colour a pixel canvas cannot really do
+   without, so the ground moved instead of the colour being refused again. At #D5E1E7 white
+   clears the same 8 the rest of the palette has to clear (measured 8.6), and the rule moved to
+   the identity's own `--plot-line` to stay visible against it.
+
+   The board is now darker than the page it sits on, which reads as a recessed panel rather
+   than a sheet — a change of appearance, not of data. Nothing about any placed pixel changed:
+   what is signed is the cell and the step number, never the colour those resolve to. */
+export const GRID_LINE = "#C3D3D9";
+export const GROUND = "#D5E1E7";

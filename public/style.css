@@ -647,6 +647,10 @@ body {
   cursor: pointer;
   padding: 0;
   position: relative;
+  /* A hairline on every swatch, not just the pale ones. White is a palette step now, and an
+     unbordered white square on this ground is a gap in the row rather than a colour. Uniform
+     because a border that appears only on light swatches reads as a rendering fault. */
+  box-shadow: inset 0 0 0 1px rgb(15 42 51 / 0.14);
   transition: transform var(--d-small) var(--ease), border-color var(--d-small) var(--ease);
 }
 

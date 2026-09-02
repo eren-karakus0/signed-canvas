@@ -50,7 +50,9 @@ Seçim tarihi 2026-08-28 · tema: oksitlenen bakır · 15 adım, `01` sıcak →
 11 #206163   12 #1B4D54   13 #173942   14 #122830   15 #0D1B21
 ```
 
-`00` boş hücre = `--current-color-20` (`#FBFDFD`). Oyuncu rengi değildir, yazılamaz.
+`00` boş hücre = `#D5E1E7`. Oyuncu rengi değildir, yazılamaz. Sayfa zemininden (`--plot-10`)
+koyu olması bilerek: tuval, üstünde durulan bir yaprak değil, oyulmuş bir yüzey olarak okunur
+— ve asıl sebebi beyazın palete girebilmesi (aşağıya bak).
 
 **Neden rampa, 15 bağımsız renk değil.** Ürünün tek aksiyonu var: tuvale tıkla. Renk seçimi
 o aksiyonun içindeki tek karar, ve sıralı bir eksende gezinmek 15 yabancı arasında arama
@@ -163,7 +165,9 @@ yolu izdüşümdür, kamera değil. Paralel çizgiler paralel kalır, uzaktaki h
 - Yükseklik birimi: çekişme başına `7` px
 - Yan yüzler üst yüzün `.85` (sağ) ve `.70` (sol) katsayısıyla koyulaştırılmışı. Ayrı
   gölge rengi tanımlanmaz; malzeme tek renkten türer.
-- Zemin ızgarası `#DCE7EB`, 8 hücrede bir, 1px — üstünde durulan milimetrik kâğıt.
+- Zemin ızgarası `--plot-line` (`#C3D3D9`), 8 hücrede bir, 1px — üstünde durulan milimetrik
+  kâğıt. Tuval zemini koyulaşınca eski `#DCE7EB` görünmez hâle geldi (1.6 ΔE); kimliğin kendi
+  çizgi token'ına taşındı, yani bir renk eklenmedi, var olan kullanıldı.
 - Nişangâh **bir kez** kullanılır: en çok çekişilen hücrede, aksan renginde.
 
 Doğrulama: `palette-lab.html` bu dilin çalışan referansı; üç palet aynı sahne, aynı ışık
@@ -215,7 +219,7 @@ bilinçle kaçındığı doygunlukta, böylece "daha fazla rampa" değil "ekleme
     20 violet     #B14AE0    30 bright orange #FF5C1A
     21 deep purple #6A1FA8   31 cyan          #22D3D3
     22 lavender   #C9B6F0    32 dark brown    #4A3226
-    23 blue       #2B5CE0    33 pale          #CBD5DA
+    23 blue       #2B5CE0    33 white         #FFFFFF
     24 sky        #5BB8F5    34 grey          #7C878C
     25 navy       #16276B    35 slate         #3D4A50
 
@@ -223,15 +227,29 @@ bilinçle kaçındığı doygunlukta, böylece "daha fazla rampa" değil "ekleme
 
 | kontrol | sonuç |
 |---|---|
-| eklemeler arasında en yakın çift | 13.0 |
+| eklemeler arasında en yakın çift | 8.8 |
 | bir rampa adımına 8'den yakın | yok |
 | aksana (#0B8FA8) en yakın | 16.2 |
 | mürekkebe (#0F2A33) en yakın | 11.5 |
-| zemine (#FBFDFD) en yakın | 9.7 |
+| zemine (#D5E1E7) en yakın | 8.6 (beyaz) |
 
-Zemin kontrolü gerçek bir kusur yakaladı: **saf beyaz zeminden 1.1 ΔE uzakta.** Beyaz piksel
-konur, sonra görünmezdi. Yerine `#CBD5DA` geldi. Aynı tur "forest", "amber" ve "near black"
-adaylarını da rampayı tekrarladıkları için eledi.
+Bu tablo artık bir not değil: `test/palette.test.ts` her koşuda yeniden hesaplıyor. Ölçümü
+üreten betik saklanmamıştı, ve kimsenin tekrar koşturamadığı bir ölçüm, dosyaya biri renk
+eklediği an sessizce yanlış olur.
+
+**Zemin, beyaz için taşındı.** İlk turda kontrol gerçek bir kusur yakalamıştı: saf beyaz o
+günkü zeminden (`#FBFDFD`) 1.1 ΔE uzaktaydı — piksel konur, imzalanır, sayılır ve görünmezdi;
+yerine `#CBD5DA` konmuştu. Ama beyaz, bir piksel tuvalinin gerçekten vazgeçemeyeceği renk:
+her logo, her harf, her parlaklık onu ister. İkinci turda rengi bir daha reddetmek yerine
+zemin `#D5E1E7`'e taşındı; beyaz artık paletin geri kalanının geçmek zorunda olduğu aynı 8
+eşiğini geçiyor (8.6). Dört aday zemin gerçek hücre boyutunda render edilip bakılarak seçildi:
+`#FBFDFD`'de beyaz tamamen kayboluyor, `#EDF2F4`'te soluk okunuyor, `#D5E1E7`'de net.
+
+`33` hiç konmamış bir adımdı — arşivde 151 yerleşmenin hiçbiri onu kullanmamıştı — bu yüzden
+rengi değiştirmek kimsenin pikselini geriye dönük değiştirmedi. İmzalanan şey hücre ve adım
+numarasıdır, o numaranın çözüldüğü renk değil; kullanılmış bir adımı değiştirmek geçmişi
+yeniden yazmak olurdu. Aynı ilk tur "forest", "amber" ve "near black" adaylarını da rampayı
+tekrarladıkları için elemişti.
 
 **Kısıt neden vardı:** renk, tel formatında tek bir onaltılık haneydi — dört bit, on beş renk.
 Yani tuvalin on beş rengi tasarım kararı değil, depolama ayrıntısının kılık değiştirmiş
