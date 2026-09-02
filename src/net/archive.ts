@@ -10,7 +10,7 @@
  * instead of quietly showing an empty grid.
  */
 
-const CELL_BYTES = 2048;
+const CELL_BYTES = 4096;
 const WITNESS_BYTES = 512;
 const N = 64;
 /* Levels a tower carries beneath its top. Mirrors `MAX_CONTEST` in projection.ts and
@@ -18,7 +18,7 @@ const N = 64;
    the server, decoded here and drawn there, and a disagreement between any two of them draws
    a tower out of the wrong colours. */
 const MAX_CONTEST = 8;
-const STACK_BYTES = (N * N * MAX_CONTEST) / 2;
+const STACK_BYTES = N * N * MAX_CONTEST;
 
 export class ArchiveError extends Error {
   override readonly name = "ArchiveError";
@@ -79,6 +79,23 @@ async function getJson(url: string, timeoutMs = 20_000): Promise<unknown> {
  * @throws ArchiveError if the archive is unreachable or answers with planes of the wrong
  * size — a short plane would paint a canvas that is silently missing its tail.
  */
+/**
+ * Decode a plane that may be in either layout, identified by its length.
+ *
+ * @throws ArchiveError if it is neither — a plane of an unexpected size would paint a canvas
+ * silently missing its tail, which is worse than refusing.
+ */
+function decodeEither(text: string, sizes: readonly number[], what: string): Uint8Array {
+  for (const size of sizes) {
+    try {
+      return decode(text, size);
+    } catch {
+      // Try the next layout.
+    }
+  }
+  throw new ArchiveError(`${what} plane is none of the known sizes (${sizes.join(", ")})`);
+}
+
 export async function snapshot(baseUrl: string): Promise<Snapshot> {
   const body = (await getJson(`${baseUrl}/snapshot`)) as {
     seq: number;
@@ -91,26 +108,41 @@ export async function snapshot(baseUrl: string): Promise<Snapshot> {
     lag: number;
   };
 
-  const cellBytes = decode(body.cells, CELL_BYTES);
+  /* Both plane layouts are accepted, and which one arrived is decided by its length.
+     The palette outgrew four bits, so a cell went from half a byte to a whole one — but a
+     browser holding a cached bundle would meet the new archive with the old decoder, or the
+     reverse during a deploy, and either way the canvas would refuse to load rather than
+     render. A length is an unambiguous signal and costs one branch. */
+  const cellBytes = decodeEither(body.cells, [CELL_BYTES, CELL_BYTES / 2], "cells");
+  const packedCells = cellBytes.length === CELL_BYTES / 2;
   const witnessBytes = decode(body.witnessed, WITNESS_BYTES);
 
   // Optional so an archive that predates the plane still loads; those canvases simply come
   // back flat, which is what they did before it existed.
   const stackBytes =
-    typeof body.stack === "string" ? decode(body.stack, STACK_BYTES) : undefined;
+    typeof body.stack === "string"
+      ? decodeEither(body.stack, [STACK_BYTES, STACK_BYTES / 2], "stack")
+      : undefined;
+  const packedStack = stackBytes !== undefined && stackBytes.length === STACK_BYTES / 2;
 
   const cells: Cell[] = [];
   for (let index = 0; index < N * N; index++) {
-    const byte = cellBytes[index >> 1]!;
-    const step = index % 2 === 0 ? byte >> 4 : byte & 0x0f;
+    const step = packedCells
+      ? index % 2 === 0
+        ? cellBytes[index >> 1]! >> 4
+        : cellBytes[index >> 1]! & 0x0f
+      : cellBytes[index]!;
     if (step === 0) continue;
 
     const tower: number[] = [];
     if (stackBytes) {
       for (let level = 0; level < MAX_CONTEST; level++) {
-        const nibble = index * MAX_CONTEST + level;
-        const packed = stackBytes[nibble >> 1]!;
-        const colour = nibble % 2 === 0 ? packed >> 4 : packed & 0x0f;
+        const at = index * MAX_CONTEST + level;
+        const colour = packedStack
+          ? at % 2 === 0
+            ? stackBytes[at >> 1]! >> 4
+            : stackBytes[at >> 1]! & 0x0f
+          : stackBytes[at]!;
         // 0 terminates. Reading past it would build a tower with a hole in it.
         if (colour === 0) break;
         tower.push(colour);

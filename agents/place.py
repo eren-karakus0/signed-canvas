@@ -29,7 +29,7 @@ import urllib.request
 BASE_URL = "https://technocore.chat"
 ROOM = "fplace"
 GRID = 64
-MIN_STEP, MAX_STEP = 1, 15
+MIN_STEP, MAX_STEP = 1, 35
 TIMEOUT_SECONDS = 30
 READ_LIMIT = 200
 
@@ -165,7 +165,7 @@ def placement_text(x: int, y: int, step: int, token: str) -> str:
     """`px <x>,<y> <step> <token>` — the only line this canvas reads.
 
     Raises:
-        ValueError: for a cell off the grid, a step outside 1..15, or a malformed token. A
+        ValueError: for a cell off the grid, a step outside 1..35, or a malformed token. A
             signature over a malformed line is perfectly valid and permanently useless, so
             this refuses before signing rather than after.
     """
@@ -177,10 +177,18 @@ def placement_text(x: int, y: int, step: int, token: str) -> str:
         c not in string.digits + string.ascii_lowercase for c in token
     ):
         raise ValueError(f"token must be 6 characters of [0-9a-z], got {token!r}")
-    # Single spaces, decimal coordinates, one lowercase hex digit for the step. `px 3,4 03 …`
-    # and `px 3,4 3 …` would be two different signed strings for one pixel, so only one
-    # spelling is accepted — see README, "Why the format is strict".
-    return f"px {x},{y} {step:x} {token}"
+    # Single spaces, decimal coordinates, one base36 digit for the step. `px 3,4 03 …` and
+    # `px 3,4 3 …` would be two different signed strings for one pixel, so only one spelling
+    # is accepted — see README, "Why the format is strict".
+    #
+    # Base36 rather than hex: hex is what four bits could hold, and the palette outgrew it.
+    # 1-f keep their exact meaning, so every pixel ever placed still means what it meant.
+    return f"px {x},{y} {_base36(step)} {token}"
+
+
+def _base36(value: int) -> str:
+    """One lowercase base36 digit. `_base36(15) == "f"`, `_base36(16) == "g"`."""
+    return "0123456789abcdefghijklmnopqrstuvwxyz"[value]
 
 
 def canonical(room: str, nonce: int, text: str) -> str:

@@ -25,7 +25,7 @@ import {
   cellIndex,
   cellTop,
 } from "./projection.ts";
-import { EMPTY, FACE_LEFT, FACE_RIGHT, GRID_LINE, GROUND, PATINA } from "./palette.ts";
+import { EMPTY, FACE_LEFT, FACE_RIGHT, GRID_LINE, GROUND, PALETTE } from "./palette.ts";
 import type { Grid } from "./grid.ts";
 
 /** Scene bitmap resolution multiplier. Keeps 0-radius edges crisp when zoomed in. */
@@ -289,7 +289,7 @@ export class Scene {
       }
     }
 
-    g.fillStyle = pick ? id : PATINA[step]!;
+    g.fillStyle = pick ? id : PALETTE[step]!;
     g.beginPath();
     g.moveTo(sx, sy);
     g.lineTo(sx + TW / 2, sy + TH / 2);

@@ -199,3 +199,40 @@ Ekran görüntüleri: `shots/desktop.png` · `shots/wide.png` · `shots/narrow.p
 - Gerçek veriyle davranış: tuval `src/sample.ts` içeriğini boyuyor ve bunu arayüzde
   söylüyor. T-9'da odadan gelen yerleşmelerle değişecek
 - Dokunmatik cihazda gerçek parmakla denenmedi; yalnızca işaretçi olayları üzerinden
+
+---
+
+## Palet genişletmesi — 2026-09-02
+
+PATINA (01–15) değişmedi. Rampa tek bir algısal yürüyüş: sıcaktan soğuğa. Pembe, mor, doygun
+mavi ona sığmıyor — bir rampa bunları taşıyamaz. 16–35 ikinci bir aile: ana tonlar, rampanın
+bilinçle kaçındığı doygunlukta, böylece "daha fazla rampa" değil "ekleme" olarak okunuyorlar.
+
+    16 red        #E02B2B    26 green         #2ECC40
+    17 deep red   #8E1616    27 mint          #8CE8A8
+    18 pink       #FF6B9D    28 emerald       #00A65A
+    19 pale pink  #FFB3C8    29 yellow        #F5D020
+    20 violet     #B14AE0    30 bright orange #FF5C1A
+    21 deep purple #6A1FA8   31 cyan          #22D3D3
+    22 lavender   #C9B6F0    32 dark brown    #4A3226
+    23 blue       #2B5CE0    33 pale          #CBD5DA
+    24 sky        #5BB8F5    34 grey          #7C878C
+    25 navy       #16276B    35 slate         #3D4A50
+
+**Ölçüldü, sonra inanıldı** (CIEDE2000, PATINA'nın seçildiği aynı disiplin):
+
+| kontrol | sonuç |
+|---|---|
+| eklemeler arasında en yakın çift | 13.0 |
+| bir rampa adımına 8'den yakın | yok |
+| aksana (#0B8FA8) en yakın | 16.2 |
+| mürekkebe (#0F2A33) en yakın | 11.5 |
+| zemine (#FBFDFD) en yakın | 9.7 |
+
+Zemin kontrolü gerçek bir kusur yakaladı: **saf beyaz zeminden 1.1 ΔE uzakta.** Beyaz piksel
+konur, sonra görünmezdi. Yerine `#CBD5DA` geldi. Aynı tur "forest", "amber" ve "near black"
+adaylarını da rampayı tekrarladıkları için eledi.
+
+**Kısıt neden vardı:** renk, tel formatında tek bir onaltılık haneydi — dört bit, on beş renk.
+Yani tuvalin on beş rengi tasarım kararı değil, depolama ayrıntısının kılık değiştirmiş
+hâliydi. Base36 bunu 35'e çıkarıyor; `1`–`f` anlamını koruyor, konmuş hiçbir piksel değişmiyor.

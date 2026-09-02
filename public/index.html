@@ -76,8 +76,11 @@
        taking more room than the thing they control. -->
   <footer class="foot">
     <div class="palette">
-      <div class="ramp" id="ramp" role="radiogroup" aria-label="Colour, hot to cold"></div>
-      <div class="ramp__ends" aria-hidden="true"><span>hot · 01</span><span>15 · cold</span></div>
+      <!-- Two rows because they are two things. The first is PATINA, one perceptual walk
+           from hot to cold; the second is the hues a single ramp cannot hold. -->
+      <div class="ramp" id="ramp" role="radiogroup" aria-label="Colour: the hot to cold ramp"></div>
+      <div class="ramp" id="hues" role="radiogroup" aria-label="Colour: hues"></div>
+      <div class="ramp__ends" aria-hidden="true"><span>ramp · hot to cold</span><span>hues</span></div>
     </div>
     <div class="foot__side">
       <div class="ident" id="identity">

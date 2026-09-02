@@ -60,9 +60,11 @@ describe("Grid.place", () => {
     }
   });
 
-  it("refuses the empty step and anything past the ramp", () => {
+  it("refuses the empty step and anything past the palette", () => {
     const grid = new Grid();
-    for (const step of [0, -1, 16, 1.5, Number.NaN]) {
+    // 16 used to be past the end. The palette now runs to 35, so the bound moved with
+    // it — asserting the old number would have been asserting nothing.
+    for (const step of [0, -1, 36, 1.5, Number.NaN]) {
       assert.throws(() => grid.place(2, 2, step), RangeError, `expected throw for step ${step}`);
     }
   });

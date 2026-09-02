@@ -9,7 +9,7 @@
 import { Grid } from "./canvas/grid.ts";
 import { Scene } from "./canvas/scene.ts";
 import { View } from "./canvas/view.ts";
-import { EMPTY, PATINA, STEPS } from "./canvas/palette.ts";
+import { EMPTY, PALETTE, RAMP_END, STEPS } from "./canvas/palette.ts";
 import { N } from "./canvas/projection.ts";
 import { formatPlacement, parsePlacement } from "./canvas/wire.ts";
 import { ARCHIVE_URL, ROOM, hasArchive, relayUrl } from "./config.ts";
@@ -496,16 +496,20 @@ function startLoading(): void {
 /* ---- the ramp ---------------------------------------------------------------------- */
 
 const ramp = need<HTMLElement>("#ramp");
+const hues = need<HTMLElement>("#hues");
 const buttons: HTMLButtonElement[] = STEPS.map((step) => {
   const button = document.createElement("button");
   button.type = "button";
   button.role = "radio";
-  button.style.background = PATINA[step]!;
+  button.style.background = PALETTE[step]!;
   button.setAttribute("aria-label", `step ${pad2(step)}`);
   button.setAttribute("aria-checked", String(step === selectedStep));
   button.tabIndex = step === selectedStep ? 0 : -1;
   button.addEventListener("click", () => selectStep(step));
-  ramp.append(button);
+  // The ramp and the hues are separate groups, not one long strip that happens to wrap:
+  // thirty-five swatches in a row is wider than the viewport, and a break that lands
+  // wherever the width puts it would split the ramp mid-walk.
+  (step <= RAMP_END ? ramp : hues).append(button);
   return button;
 });
 

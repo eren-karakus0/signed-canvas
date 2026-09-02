@@ -26,6 +26,7 @@ from snapshot import MAX_STACK, STACK_BYTES, get_level, pack, pack_stack, set_le
 
 ROOM = "p-canvas-test"
 DID = "did:key:z6MkkQQzb6WvXYaN1Q9F4aJhCZ8SsuUmZv8mYnZ8Zt3rjKQ9"
+BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"
 
 
 class Row:
@@ -68,8 +69,8 @@ class Packing(unittest.TestCase):
         self.assertEqual(tower(plane, 1, 1), list(range(1, MAX_STACK + 1)))
 
     def test_cells_do_not_bleed_into_each_other(self) -> None:
-        # Two nibbles per byte and eight levels per cell: an off-by-one in the index writes
-        # into the neighbouring cell's tower and looks like a rendering bug.
+        # Eight levels per cell, one byte each: an off-by-one in the index writes into the
+        # neighbouring cell's tower and looks like a rendering bug.
         plane = pack_stack([Row(0, 0, 1), Row(0, 0, 2), Row(1, 0, 5), Row(1, 0, 6)])
         self.assertEqual(tower(plane, 0, 0)[:2], [1, 0])
         self.assertEqual(tower(plane, 1, 0)[:2], [5, 0])
@@ -78,8 +79,8 @@ class Packing(unittest.TestCase):
         self.assertEqual(len(pack_stack([])), STACK_BYTES)
 
     def test_every_level_of_every_cell_round_trips(self) -> None:
-        # Exhaustive over the nibble layout rather than a spot check: this is index
-        # arithmetic, and index arithmetic is wrong at exactly one place or not at all.
+        # Exhaustive over the layout rather than a spot check: this is index arithmetic, and
+        # index arithmetic is wrong at exactly one place or not at all.
         plane = bytearray(STACK_BYTES)
         for index in range(0, 64 * 64, 37):
             for level in range(MAX_STACK):
@@ -92,7 +93,7 @@ class Packing(unittest.TestCase):
 
     def test_an_unpaintable_step_is_refused(self) -> None:
         with self.assertRaises(Exception):
-            pack_stack([Row(0, 0, 16)])
+            pack_stack([Row(0, 0, 36)])
 
     def test_a_cell_off_the_canvas_is_refused(self) -> None:
         with self.assertRaises(Exception):
@@ -118,7 +119,7 @@ class AgainstTheArchive(unittest.TestCase):
                     "seq": seq,
                     "ts": "2026-09-02T00:00:00.000000Z",
                     "from": DID,
-                    "text": f"px {cx},{cy} {step:x} {seq:06x}",
+                    "text": f"px {cx},{cy} {BASE36[step]} {seq:06x}",
                     "nonce": 1788000000000 + seq,
                 }
                 for seq, (cx, cy, step) in enumerate(placements, start=1)
@@ -160,9 +161,8 @@ class AgainstTheArchive(unittest.TestCase):
             plane = pack_stack(list(archive.tower_rows(MAX_STACK + 1)))
 
         def top_of(cx: int, cy: int) -> int:
-            index = cy * 64 + cx
-            byte, high = divmod(index, 2)
-            return (cells[byte] >> 4) if high == 0 else (cells[byte] & 0x0F)
+            # One byte per cell since the palette outgrew four bits.
+            return cells[cy * 64 + cx]
 
         self.assertEqual(top_of(3, 3), 3)
         self.assertEqual(tower(plane, 3, 3), [1, 2, 0, 0, 0, 0, 0, 0])

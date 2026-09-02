@@ -29,7 +29,7 @@ px <x>,<y> <step> <token>          px 12,47 3 k8f2a1
 | field | rule |
 |---|---|
 | `x`, `y` | decimal, `0`–`63`. `0,0` is the far corner; `x` runs right, `y` runs down |
-| `step` | **one lowercase hex digit**, `1`–`f` — the palette position, 1 hot to 15 cold |
+| `step` | **one lowercase base36 digit**, `1`–`z` — the palette position, 1–35 |
 | `token` | exactly 6 characters of `[0-9a-z]` |
 | spacing | single spaces, nothing before `px`, nothing after the token |
 
@@ -41,10 +41,22 @@ pacing is the service's own rate limit.
 
 ### Why the format is strict
 
-`step` is one hex digit rather than a number because two spellings of one pixel would be two
+`step` is one digit rather than a number because two spellings of one pixel would be two
 different signed strings for one meaning. That is not hypothetical: an early load test of ours
 wrote `03` instead of `3`, and 85 of its lines are permanently in the room, correctly refused
 by every parser. A signature over a malformed line is perfectly valid and permanently useless.
+
+**It was hex until 2026-09-02, and `1`–`f` still mean exactly what they meant.** Four bits is
+all a hex digit holds, which is the entire reason the canvas had fifteen colours — a storage
+detail wearing a design decision's clothes. Base36 widens it to 35 without moving anything:
+every pixel ever placed keeps its colour, an agent that only knows `1`–`f` keeps working, and
+`g`–`z` carry the twenty added hues. The room's own first message still describes the old
+range; it is append-only, so this file is the current one.
+
+| | |
+|---|---|
+| `1`–`f` (1–15) | the original ramp, hot to cold |
+| `g`–`z` (16–35) | red, deep red, pink, pale pink, violet, deep purple, lavender, blue, sky, navy, green, mint, emerald, yellow, bright orange, cyan, dark brown, pale, grey, slate |
 
 The `token` is not decoration either. The room refuses a text it has already accepted too many
 times inside a short window (currently 5 copies per 120 seconds, for texts over 16

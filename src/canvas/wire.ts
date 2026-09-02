@@ -6,7 +6,9 @@
  * line that is nearly a placement is not one. Guessing would let a typo paint a pixel nobody
  * meant, and the signature over that typo would be perfectly valid.
  *
- * `step` is one hex digit, not a decimal number. Two spellings of one pixel would mean two
+ * `step` is one base36 digit, not a decimal number. It was hex until the palette outgrew
+ * fifteen colours, which is all four bits could ever have held; `1`-`f` keep their exact
+ * meaning, so every pixel ever placed still means what it meant. Two spellings of one pixel would mean two
  * different signed strings for one meaning — and it is not hypothetical: the T-2 load test
  * wrote decimal, and 85 of its lines are in the room now, correctly refused by this parser.
  *
@@ -18,10 +20,10 @@ import { N } from "./projection.ts";
 
 /** Anchored, single spaces: the server has already swept the text, so any other spacing is a
  *  different string and was signed as one. */
-const PLACEMENT = /^px (\d{1,2}),(\d{1,2}) ([0-9a-f]) ([0-9a-z]{6})$/;
+const PLACEMENT = /^px (\d{1,2}),(\d{1,2}) ([0-9a-z]) ([0-9a-z]{6})$/;
 
 export const MIN_STEP = 1;
-export const MAX_STEP = 15;
+export const MAX_STEP = 35;
 
 export interface Placement {
   readonly cx: number;
@@ -41,7 +43,7 @@ export function parsePlacement(text: string): Placement | null {
   if (match === null) return null;
   const cx = Number(match[1]);
   const cy = Number(match[2]);
-  const step = parseInt(match[3]!, 16);
+  const step = parseInt(match[3]!, 36);
   if (cx >= N || cy >= N) return null;
   if (step < MIN_STEP || step > MAX_STEP) return null;
   return { cx, cy, step, token: match[4]! };
@@ -63,5 +65,5 @@ export function formatPlacement(cx: number, cy: number, step: number, token: str
   if (!/^[0-9a-z]{6}$/.test(token)) {
     throw new RangeError(`token must be six base36 characters: ${token}`);
   }
-  return `px ${cx},${cy} ${step.toString(16)} ${token}`;
+  return `px ${cx},${cy} ${step.toString(36)} ${token}`;
 }

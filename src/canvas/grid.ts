@@ -2,6 +2,7 @@
    the archiver and the room feed it, and it only ever holds what has already been verified. */
 
 import { MAX_CONTEST, N, cellIndex, inBounds } from "./projection.ts";
+import { MAX_STEP } from "./wire.ts";
 import { EMPTY } from "./palette.ts";
 
 export interface Cell {
@@ -45,7 +46,7 @@ export class Grid {
    */
   place(cx: number, cy: number, step: number): boolean {
     if (!inBounds(cx, cy)) throw new RangeError(`cell out of bounds: ${cx},${cy}`);
-    if (!Number.isInteger(step) || step <= EMPTY || step > 15) {
+    if (!Number.isInteger(step) || step <= EMPTY || step > MAX_STEP) {
       throw new RangeError(`not a writable palette step: ${step}`);
     }
     const i = cellIndex(cx, cy);

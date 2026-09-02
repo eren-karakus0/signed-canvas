@@ -2,9 +2,16 @@
 
 Three planes, all indexed by ``cy * N + cx``:
 
-    cells      4 bits per cell, two cells per byte       2,048 bytes
-    witnessed  1 bit per cell                              512 bytes
-    stack      4 bits × MAX_STACK levels per cell        16,384 bytes
+    cells      1 byte per cell                            4,096 bytes
+    witnessed  1 bit per cell                               512 bytes
+    stack      1 byte × MAX_STACK levels per cell         32,768 bytes
+
+``cells`` and ``stack`` held a palette index in four bits until the palette outgrew them.
+Fifteen colours is what half a byte can say, and that was the real reason the canvas had
+fifteen — not a design decision anyone would defend once it was written down. A whole byte
+holds the 35 the wire format now allows, with room left, and costs 20 KB on a response that
+gzips to a fraction of it. Six-bit packing would have saved half of that and added bit
+arithmetic to two languages for the privilege.
 
 ``witnessed`` exists because of the proof problem recorded in ``archive.py``: a client that
 received only colours would have to render every pixel as though it were equally proven, and
@@ -33,7 +40,7 @@ from typing import Iterable, Sequence
 
 N = 64
 CELLS = N * N
-CELL_BYTES = CELLS // 2
+CELL_BYTES = CELLS
 WITNESS_BYTES = CELLS // 8
 
 # Levels a tower can show beneath its top. The client caps elevation at the same number
@@ -41,7 +48,8 @@ WITNESS_BYTES = CELLS // 8
 # contested more often keeps its most recent levels and forgets the older ones. The two
 # constants have to agree, and the round-trip test is what says they do.
 MAX_STACK = 8
-STACK_BYTES = CELLS * MAX_STACK // 2
+STACK_BYTES = CELLS * MAX_STACK
+MAX_STEP = 35
 
 
 class SnapshotError(Exception):
@@ -63,7 +71,7 @@ def pack_stack(rows: Iterable) -> bytes:
     for row in rows:
         if not (0 <= row.cx < N and 0 <= row.cy < N):
             raise SnapshotError(f"cell out of bounds: {row.cx},{row.cy}")
-        if not (1 <= row.step <= 15):
+        if not (1 <= row.step <= MAX_STEP):
             raise SnapshotError(f"step {row.step} is not paintable")
         index = row.cy * N + row.cx
         # Keep one more than the tower needs: the newest is the top, which lives in `cells`.
@@ -87,21 +95,14 @@ def set_level(stack: bytearray, index: int, level: int, step: int) -> None:
     """
     if not (0 <= level < MAX_STACK):
         raise SnapshotError(f"level {level} is outside the tower (0..{MAX_STACK - 1})")
-    if not (0 <= step <= 15):
+    if not (0 <= step <= MAX_STEP):
         raise SnapshotError(f"step {step} is not a palette index")
-    nibble = index * MAX_STACK + level
-    byte, high = divmod(nibble, 2)
-    if high == 0:
-        stack[byte] = (stack[byte] & 0x0F) | (step << 4)
-    else:
-        stack[byte] = (stack[byte] & 0xF0) | step
+    stack[index * MAX_STACK + level] = step
 
 
 def get_level(stack: bytes, index: int, level: int) -> int:
     """Read one tower level. 0 means the tower does not reach this high."""
-    nibble = index * MAX_STACK + level
-    byte, high = divmod(nibble, 2)
-    return (stack[byte] >> 4) if high == 0 else (stack[byte] & 0x0F)
+    return stack[index * MAX_STACK + level]
 
 
 def pack(rows: Iterable) -> tuple[bytes, bytes]:
@@ -120,14 +121,10 @@ def pack(rows: Iterable) -> tuple[bytes, bytes]:
     for row in rows:
         if not (0 <= row.cx < N and 0 <= row.cy < N):
             raise SnapshotError(f"cell out of bounds: {row.cx},{row.cy}")
-        if not (1 <= row.step <= 15):
+        if not (1 <= row.step <= MAX_STEP):
             raise SnapshotError(f"step {row.step} is not paintable")
         index = row.cy * N + row.cx
-        byte, high = divmod(index, 2)
-        if high == 0:
-            cells[byte] = (cells[byte] & 0x0F) | (row.step << 4)
-        else:
-            cells[byte] = (cells[byte] & 0xF0) | row.step
+        cells[index] = row.step
         if row.witnessed:
             witnessed[index // 8] |= 1 << (index % 8)
         else:
@@ -154,8 +151,7 @@ def unpack(cells: bytes, witnessed: bytes) -> list[tuple[int, int, int, bool]]:
 
     out: list[tuple[int, int, int, bool]] = []
     for index in range(CELLS):
-        byte, high = divmod(index, 2)
-        step = (cells[byte] >> 4) if high == 0 else (cells[byte] & 0x0F)
+        step = cells[index]
         if step == 0:
             continue
         proven = bool(witnessed[index // 8] & (1 << (index % 8)))
@@ -193,15 +189,11 @@ def set_cell(
     """
     if not (0 <= cx < N and 0 <= cy < N):
         raise SnapshotError(f"cell out of bounds: {cx},{cy}")
-    if not (1 <= step <= 15):
+    if not (1 <= step <= MAX_STEP):
         raise SnapshotError(f"step {step} is not paintable")
 
     index = cy * N + cx
-    byte, high = divmod(index, 2)
-    if high == 0:
-        cells[byte] = (cells[byte] & 0x0F) | (step << 4)
-    else:
-        cells[byte] = (cells[byte] & 0xF0) | step
+    cells[index] = step
 
     bit = 1 << (index % 8)
     if proven:

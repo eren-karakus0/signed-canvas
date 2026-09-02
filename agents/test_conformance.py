@@ -143,9 +143,16 @@ class PlacementGrammar(unittest.TestCase):
         self.assertEqual(placement_text(12, 47, 3, "k8f2a1"), "px 12,47 3 k8f2a1")
         self.assertEqual(placement_text(0, 0, 15, "abcdef"), "px 0,0 f abcdef")
 
-    def test_step_is_hex_not_decimal(self) -> None:
+    def test_step_is_one_digit_not_decimal(self) -> None:
         # The mistake that cost 85 permanently-refused lines in the room.
         self.assertEqual(placement_text(1, 1, 12, "aaaaaa"), "px 1,1 c aaaaaa")
+
+    def test_the_palette_past_fifteen_uses_base36(self) -> None:
+        # Hex is what four bits could hold and the palette outgrew it. 1-f keep their exact
+        # meaning — every pixel ever placed still means what it meant — and g-z carry the rest.
+        self.assertEqual(placement_text(1, 1, 15, "aaaaaa"), "px 1,1 f aaaaaa")
+        self.assertEqual(placement_text(1, 1, 16, "aaaaaa"), "px 1,1 g aaaaaa")
+        self.assertEqual(placement_text(1, 1, 35, "aaaaaa"), "px 1,1 z aaaaaa")
 
     def test_refuses_before_signing_rather_than_after(self) -> None:
         for x, y, step, token in [
@@ -153,7 +160,7 @@ class PlacementGrammar(unittest.TestCase):
             (0, 64, 1, "abcdef"),
             (-1, 0, 1, "abcdef"),
             (0, 0, 0, "abcdef"),
-            (0, 0, 16, "abcdef"),
+            (0, 0, 36, "abcdef"),
             (0, 0, 1, "abcde"),
             (0, 0, 1, "ABCDEF"),
             (0, 0, 1, "abcde!"),

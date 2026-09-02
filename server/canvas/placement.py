@@ -14,7 +14,7 @@ from typing import NamedTuple
 
 N = 64
 MIN_STEP = 1
-MAX_STEP = 15
+MAX_STEP = 35
 
 # Anchored at both ends, with single spaces: the server has already swept the text, so any
 # other spacing is a different string and was signed as one.

@@ -97,7 +97,7 @@ describe("formatPlacement", () => {
       [N, 0, 1],
       [0, N, 1],
       [0, 0, 0],
-      [0, 0, 16],
+      [0, 0, 36],
       [0, 0, 1.5],
     ] as const) {
       assert.throws(
@@ -110,5 +110,52 @@ describe("formatPlacement", () => {
 
   it("throws on a token that is not six base36 characters", () => {
     assert.throws(() => formatPlacement(0, 0, 1, "AB!"), RangeError);
+  });
+});
+
+/* The palette past fifteen.
+ *
+ * `step` was one hex digit, which is exactly what four bits can hold and exactly why the
+ * canvas had fifteen colours — a storage detail wearing a design decision's clothes. Base36
+ * widens it to 35 without moving anything: `1`-`f` parse and format as they always did, so
+ * every pixel ever placed still means what it meant, and `g`-`z` carry the rest.
+ */
+describe("base36 steps", () => {
+  it("keeps every hex step meaning exactly what it meant", () => {
+    for (let step = 1; step <= 15; step++) {
+      const line = formatPlacement(3, 4, step, "abcdef");
+      assert.equal(line, `px 3,4 ${step.toString(16)} abcdef`);
+      assert.equal(parsePlacement(line)?.step, step);
+    }
+  });
+
+  it("round-trips the steps hex could not reach", () => {
+    for (const [step, digit] of [
+      [16, "g"],
+      [25, "p"],
+      [35, "z"],
+    ] as const) {
+      const line = formatPlacement(3, 4, step, "abcdef");
+      assert.equal(line, `px 3,4 ${digit} abcdef`);
+      assert.equal(parsePlacement(line)?.step, step);
+    }
+  });
+
+  it("still refuses a step past the end of the palette", () => {
+    // 36 would be "10" — two characters, which the grammar does not accept anyway. The
+    // bound is asserted here so widening it again cannot happen silently.
+    assert.throws(() => formatPlacement(3, 4, 36, "abcdef"), RangeError);
+    assert.equal(parsePlacement("px 3,4 0 abcdef"), null, "0 is the empty cell, not a colour");
+  });
+
+  it("reads a line written by an agent that only knows hex", () => {
+    // The format was documented as hex in the room's permanent first message, and a
+    // third-party agent has already written against it.
+    assert.deepEqual(parsePlacement("px 15,40 a w9p2mz"), {
+      cx: 15,
+      cy: 40,
+      step: 10,
+      token: "w9p2mz",
+    });
   });
 });

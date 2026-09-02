@@ -285,6 +285,9 @@ body {
 
 .palette {
   grid-column: 1;
+  display: grid;
+  gap: 3px;
+  justify-items: start;
 }
 
 .foot__side {
@@ -352,7 +355,11 @@ body {
 
 .ramp__ends {
   display: flex;
+  /* Stretched to the palette's width. Left to size itself it shrank to its own text and the
+     two labels collided into "hot to coldhues". */
+  align-self: stretch;
   justify-content: space-between;
+  gap: var(--s-2);
   font-family: var(--font-micro);
   font-size: 9px;
   letter-spacing: 0.2em;
