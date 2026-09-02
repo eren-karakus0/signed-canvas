@@ -223,6 +223,27 @@ body {
   touch-action: none;
 }
 
+/* The canvas is focusable, so it needs a focus ring. Inset rather than outside: the stage
+   clips its overflow, and a ring drawn on the boundary would be half-invisible. */
+.stage canvas:focus-visible {
+  outline: 2px solid var(--current-color-40);
+  outline-offset: -3px;
+}
+
+/* Read by a screen reader, never shown. Not `display: none`, which removes it from the
+   accessibility tree along with the eye. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* The shape signature as a corner cut, not a rounded box. */
 .stage__corner {
   position: absolute;

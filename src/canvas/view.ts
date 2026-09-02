@@ -14,8 +14,12 @@ const MAX_SCALE = 3;
 /** Pointer travel, in CSS pixels, above which a press is a drag and not a click. */
 const DRAG_SLOP = 4;
 
+/** Where a hover came from. A keyboard cursor is nowhere near the mouse, and anything that
+ *  positions itself by the pointer has to know that. */
+export type HoverSource = "pointer" | "keyboard";
+
 export interface ViewEvents {
-  onHover(cell: number | null): void;
+  onHover(cell: number | null, source: HoverSource): void;
   onActivate(cell: number): void;
 }
 
@@ -159,7 +163,7 @@ export class View {
       const cell = this.scene.pick(bx, by);
       if (cell !== this.hovered) {
         this.hovered = cell;
-        this.events.onHover(cell);
+        this.events.onHover(cell, "pointer");
         this.request();
       }
     });
@@ -194,14 +198,59 @@ export class View {
     );
 
     c.addEventListener("pointerleave", () => {
-      if (this.hovered !== null) {
+      // A keyboard cursor must survive the mouse leaving: they are the same cursor, and
+      // taking the pointer off the canvas is not a reason to lose your place in it.
+      if (this.hovered !== null && document.activeElement !== c) {
         this.hovered = null;
-        this.events.onHover(null);
+        this.events.onHover(null, "pointer");
         this.request();
       }
     });
 
-    // The stage can change size without the window doing so — a font landing, a breakpoint,
+    /* Keyboard. The canvas is a control, not a picture, and until now it could only be
+       operated by pointing at it — which excludes anyone using a keyboard, a switch, or a
+       screen reader, and it is the same people the identity gate is careful with.
+
+       Arrows walk the grid's own axes rather than the screen's diagonals. The projection
+       turns "up" into up-and-right, and a control whose arrow keys do not go the way the
+       arrow points is worse than one with no arrow keys. */
+    c.addEventListener("keydown", (e) => {
+      const step = e.shiftKey ? 8 : 1;
+      let dx = 0;
+      let dy = 0;
+      if (e.key === "ArrowLeft") dx = -step;
+      else if (e.key === "ArrowRight") dx = step;
+      else if (e.key === "ArrowUp") dy = -step;
+      else if (e.key === "ArrowDown") dy = step;
+      else if (e.key === "Enter" || e.key === " ") {
+        if (this.hovered !== null) {
+          e.preventDefault();
+          this.events.onActivate(this.hovered);
+        }
+        return;
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        this.focusCellAt(0, 0);
+        return;
+      } else if (e.key === "End") {
+        e.preventDefault();
+        this.focusCellAt(N - 1, N - 1);
+        return;
+      } else {
+        return;
+      }
+
+      e.preventDefault();
+      // Starting in the middle rather than at 0,0: a cursor that appears in a far corner of
+      // an axonometric projection is a cursor nobody finds.
+      const from = this.hovered ?? Math.floor(N / 2) * N + Math.floor(N / 2);
+      this.focusCellAt(
+        Math.min(N - 1, Math.max(0, (from % N) + dx)),
+        Math.min(N - 1, Math.max(0, Math.floor(from / N) + dy)),
+      );
+    });
+
+    // The scene can change size without the window doing so — a font landing, a breakpoint,
     // a rotated phone — so observe the element rather than the window.
     new ResizeObserver(() => this.resize()).observe(this.canvas);
   }
@@ -270,6 +319,33 @@ export class View {
 
   /** The cell under the pointer, or null. Read after an async lookup to check the pointer
    *  has not moved on — painting a stale record would attribute the wrong cell. */
+  /**
+   * Put the keyboard cursor on a cell, exactly as the pointer would.
+   *
+   * Reuses `hovered` rather than adding a second cursor: the mark, the readout, the tooltip
+   * and the ownership fetch all already follow it, and two cursors would be two things to
+   * keep in agreement for no gain.
+   */
+  private focusCellAt(cx: number, cy: number): void {
+    const cell = cy * N + cx;
+    if (cell === this.hovered) return;
+    this.hovered = cell;
+    this.events.onHover(cell, "keyboard");
+    this.request();
+  }
+
+  /** Where a cell's top face is on screen, in client coordinates. */
+  cellToClient(cell: number): { x: number; y: number } {
+    const cx = cell % N;
+    const cy = Math.floor(cell / N);
+    const { x: bx, y: by } = cellTop(cx, cy, this.scene.contestAt(cell));
+    const r = this.canvas.getBoundingClientRect();
+    return {
+      x: r.left + this.tx + bx * this.scale,
+      y: r.top + this.ty + by * this.scale,
+    };
+  }
+
   get hoveredCell(): number | null {
     return this.hovered;
   }

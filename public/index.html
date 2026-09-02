@@ -46,8 +46,12 @@
   </header>
 
   <section class="stage" aria-label="The canvas">
-    <canvas id="canvas" role="img"
-            aria-label="A 64 by 64 pixel canvas drawn in axonometric projection"></canvas>
+    <!-- `application`, not `img`: it is a control. Focusable, so the arrows reach it. -->
+    <canvas id="canvas" tabindex="0" role="application"
+            aria-label="A 64 by 64 pixel canvas. Arrow keys move a cell at a time, shift and
+                        an arrow move eight, Enter places the selected colour."
+            aria-describedby="canvas-help"></canvas>
+    <p class="visually-hidden" id="canvas-help" aria-live="polite"></p>
     <div class="stage__corner" aria-hidden="true"></div>
     <button class="reset" id="reset" type="button">reset view</button>
 

@@ -765,7 +765,37 @@ Both branches were exercised on the box before the timer was enabled: the failur
 against a deliberately dead site URL, and one labelled test message through Telegram. A
 notifier nobody has watched work is not monitoring.
 
-**T-12 · Reduced motion, contrast, mobile legibility** — serves NFR-8, NFR-9
+**T-12 · Reduced motion, contrast, mobile legibility, and the keyboard** — serves NFR-8,
+NFR-9 — ✅ **DONE 2026-09-02**
+
+Three quarters of this had been done in passing and one quarter had not been done at all.
+
+- `prefers-reduced-motion` block: present, and the countdown bar now stops sweeping under it.
+- `sagla.py`: clean, and the disclaimer's contrast was measured **as composited** rather than
+  as tokens — it is the ink at 72% opacity, which is a different colour. 5.70:1.
+- 390 px: checked, and the palette rows go full-width there for fingertips.
+- **The keyboard: not done, and not partly done — the canvas could only be operated by
+  pointing at it.** That excludes anyone using a keyboard, a switch or a screen reader, which
+  is the same audience the identity gate is careful with.
+
+The canvas is focusable now, with an inset focus ring — inset because the stage clips its
+overflow and a ring on the boundary would be half-invisible. Arrows walk one cell, shift and
+an arrow walk eight, Home and End reach the corners, Enter places. Arrows follow the *grid's*
+axes rather than the screen's diagonals: the projection turns "up" into up-and-right, and a
+control whose arrow keys do not go the way the arrow points is worse than one without them.
+
+The keyboard cursor is the same cursor as the pointer's, so the mark, the readout, the
+tooltip and the ownership fetch all follow it without a second thing to keep in agreement.
+Two consequences worth naming: `pointerleave` no longer clears the cursor while the canvas has
+focus — taking the mouse off is not a reason to lose your place — and the tooltip positions
+itself at the cell rather than at the pointer when the move came from a key, because for
+someone who never touched the mouse the pointer is in a corner.
+
+Position is announced through a visually-hidden live region, on the cell rather than on every
+pointer pixel: a mouse crossing the canvas would otherwise narrate a hundred cells nobody
+asked about.
+
+**T-21 · Where the interface answers** — ✅ **DONE 2026-09-02**
 *Done when:* `sagla.py` is clean and screenshots at 390 px wide are legible.
 *Depends on:* T-7.
 *Estimate:* 3–4 h.

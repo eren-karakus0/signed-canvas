@@ -204,6 +204,7 @@ async function seedNonceFromRoom(did: string): Promise<void> {
 
 /* ---- what is under the pointer, at the pointer ------------------------------------- */
 
+const canvasHelp = need<HTMLElement>("#canvas-help");
 const tip = need<HTMLElement>("#tip");
 const tipCell = need<HTMLElement>("#tip-cell");
 const tipStep = need<HTMLElement>("#tip-step");
@@ -260,6 +261,27 @@ function showTip(cell: number | null): void {
   tipOwner.textContent = `${known.did.slice(8, 20)}…`;
   tipBasis.textContent = known.witnessed ? "witnessed" : "attested";
   tipBasis.dataset["basis"] = known.witnessed ? "witnessed" : "attested";
+}
+
+/**
+ * Say where the cursor is, for a reader that cannot see the crosshair.
+ *
+ * Announced on the cell rather than on every pointer pixel: this is an `aria-live` region and
+ * a mouse crossing the canvas would otherwise narrate a hundred cells nobody asked about. The
+ * pointer moves within a cell without changing it, so this only speaks when the cell does.
+ */
+function announceCursor(cell: number | null): void {
+  if (cell === null) {
+    canvasHelp.textContent = "";
+    return;
+  }
+  const cx = cell % N;
+  const cy = Math.floor(cell / N);
+  const step = grid.step[cell] ?? EMPTY;
+  canvasHelp.textContent =
+    step === EMPTY
+      ? `${cx}, ${cy}. Empty.`
+      : `${cx}, ${cy}. Colour ${step}, contested ${grid.contest[cell] ?? 0} times.`;
 }
 
 canvas.addEventListener("pointermove", (event) => {
@@ -375,14 +397,21 @@ proofButton.addEventListener("click", () => {
 /* ---- the canvas -------------------------------------------------------------------- */
 
 const view = new View(canvas, scene, {
-  onHover(cell) {
+  onHover(cell, source) {
+    announceCursor(cell);
     // The footer row is deliberately not updated here. It follows the *pinned* inspection,
     // and the tooltip follows the pointer — mixing them put the hovered cell's number beside
     // the pinned cell's owner, so the row read "cell 45,24 · step empty · owner …" about two
     // different cells at once.
     inspectCell(cell);
     showTip(cell);
-    if (cell !== null) positionTip(lastPointer.x, lastPointer.y);
+    if (cell !== null) {
+      // A keyboard cursor is nowhere near the mouse. Placing the tooltip by the pointer
+      // would put it wherever the mouse happened to be left, which for someone who never
+      // touched the mouse is the top-left corner.
+      const at = source === "keyboard" ? view.cellToClient(cell) : lastPointer;
+      positionTip(at.x, at.y);
+    }
   },
   onActivate(cell) {
     void placePixel(cell % N, Math.floor(cell / N));
