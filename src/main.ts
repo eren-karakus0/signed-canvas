@@ -60,6 +60,45 @@ const inFlight = new Set<number>();
  * It is a pace, chosen so a canvas is composed rather than sprayed. */
 const PLACE_COOLDOWN_MS = 10_000;
 let readyToPlaceAt = 0;
+let cooldownTimer: number | undefined;
+
+const cooldownBox = need<HTMLElement>("#cooldown");
+const cooldownText = need<HTMLElement>("#cooldown-text");
+const cooldownBar = need<HTMLElement>("#cooldown-bar");
+
+/**
+ * Run the visible countdown to the next placement.
+ *
+ * The number is stepped once a second; the bar is handed the whole duration and left to
+ * sweep, so the wait reads as passing rather than as a value being rewritten. Both are
+ * outside the `aria-live` status line on purpose — a number that changes every second would
+ * be announced every second, and the status line already says the wait once, in words.
+ */
+function startCooldown(): void {
+  window.clearInterval(cooldownTimer);
+  cooldownBox.hidden = false;
+
+  // Reset to full, force the style to settle, then let it run: without the reflow the
+  // browser coalesces both writes and the bar jumps straight to empty.
+  cooldownBar.style.transition = "none";
+  cooldownBar.style.transform = "scaleX(1)";
+  void cooldownBar.offsetWidth;
+  cooldownBar.style.transition = `transform ${PLACE_COOLDOWN_MS}ms linear`;
+  cooldownBar.style.transform = "scaleX(0)";
+
+  const tick = (): void => {
+    const left = Math.ceil((readyToPlaceAt - Date.now()) / 1000);
+    if (left <= 0) {
+      window.clearInterval(cooldownTimer);
+      cooldownTimer = undefined;
+      cooldownBox.hidden = true;
+      return;
+    }
+    cooldownText.textContent = `next pixel in ${left}s`;
+  };
+  tick();
+  cooldownTimer = window.setInterval(tick, 250);
+}
 
 function say(message: string, tone: "info" | "ok" | "warn" = "info"): void {
   statusLine.textContent = message;
@@ -307,6 +346,7 @@ async function placePixel(cx: number, cy: number): Promise<void> {
     }
     roomHead = Math.max(roomHead, outcome.seq);
     readyToPlaceAt = Date.now() + PLACE_COOLDOWN_MS;
+    startCooldown();
     // Name the lane when it was not the relay. The pixel is equally placed and equally
     // provable either way — we hold the signature — but it says why the archive has not
     // caught up yet, which is otherwise an unexplained few seconds.

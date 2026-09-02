@@ -85,6 +85,13 @@
         <button type="button" class="link link--warn" data-forget>forget</button>
       </div>
       <p class="status" id="status" role="status" aria-live="polite"></p>
+      <!-- Deliberately outside the live region above: a value that changes every second
+           would make a screen reader announce every second. The status line already says
+           the wait once, in words, which is the part worth hearing. -->
+      <p class="cooldown" id="cooldown" aria-hidden="true" hidden>
+        <span class="cooldown__text" id="cooldown-text"></span>
+        <span class="cooldown__track"><span class="cooldown__bar" id="cooldown-bar"></span></span>
+      </p>
     </div>
     <div class="foot__record">
       <dl class="readout" id="readout">

@@ -52,6 +52,15 @@
   padding: 0;
 }
 
+/* An author `display` beats the user-agent's `[hidden] { display: none }`, so any component
+   styled as flex or grid stays on screen when the attribute is set. That shipped twice: the
+   identity gate, which left a person stuck behind a panel they had dismissed, and the
+   cooldown, which never went away. Settled once, here, rather than per component — the third
+   occurrence would have been just as invisible as the first two. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   height: 100%;
@@ -414,6 +423,38 @@ body {
   border-color: var(--current-warn);
 }
 
+/* The wait before the next pixel, counting down.
+ *
+ * Its own element rather than a suffix on the status line, because that line is an
+ * `aria-live` region: a number rewritten every second would be announced every second.
+ * Here it is `aria-hidden`, and the status line carries the same fact once, in words. */
+.cooldown {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--current-color-40);
+  font-variant-numeric: tabular-nums;
+}
+
+.cooldown__track {
+  display: block;
+  width: 96px;
+  height: 2px;
+  background: var(--current-line);
+}
+
+.cooldown__bar {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--current-color-40);
+  transform-origin: right center;
+}
+
 .status {
   font-family: var(--font-micro);
   font-size: var(--t-micro);
@@ -433,12 +474,8 @@ body {
   opacity: 1;
 }
 
-/* An author `display` beats the user-agent's `[hidden] { display: none }`, so setting the
-   attribute would leave the panel on screen and the person stuck behind it. Found by the
-   end-to-end test clicking "I understand" and watching nothing happen. */
-.gate[hidden] {
-  display: none;
-}
+/* The `[hidden]` rule near the top of this file covers the gate; it used to be handled
+   here, per component, which is what let the same bug reappear on the cooldown. */
 
 .gate {
   position: absolute;
@@ -618,6 +655,12 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* The bar stops sweeping and steps with the number instead. The information is in the
+     number; the sweep is only there to make the wait feel like it is passing. */
+  .cooldown__bar {
+    transition: none !important;
+  }
+
   *,
   *::before,
   *::after {
