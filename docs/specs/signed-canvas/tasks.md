@@ -835,6 +835,42 @@ the warning on recovery. It only ever wrote it.
 as a raw literal in the bundle. Renamed rather than excepted: an id shaped like a colour will
 trip every such check, not just this one.
 
+**T-23 · The timelapse** — ✅ **DONE 2026-09-03**
+
+The thing people shared out of r/place was never the finished picture, it was watching it
+arrive. The archive could always answer it — every placement is stored in sequence order with
+who wrote it and when — so this asks the room for nothing.
+
+It runs on its own `Grid` and its own `FlatScene` rather than rewinding the live one.
+Placements keep arriving while it plays, and a replay that borrowed the real grid would either
+fight them or have to be undone afterwards; "undone afterwards" is how a canvas ends up
+showing a past that never happened. Forward is incremental, one cell repainted per placement.
+Backward rebuilds from empty, because a placement cannot be undone: the colour under it is
+whatever the placement before it left there, and the grid keeps no undo log. Rebuilding is a
+few thousand `place` calls and one full draw — cheaper than carrying that log.
+
+**Paced by the clock, not by frames.** The first version stepped a whole number of placements
+per frame, which only solves the crowded case: the floor of one step per frame is 60 a second,
+so a canvas with a hundred placements was over in 1.8 seconds. That is not a replay, it is a
+flicker. Deriving the position from elapsed time makes a hundred and a hundred thousand both
+take about the length of a look. Measured at 8.4 placements/s over 149, ≈ 18 s.
+
+*The check that passed while the feature was broken.* The first verification read the
+"31 / 149" counter and watched it climb, and it climbed — over a blank board. The replay drew
+into its own bitmap and nothing asked the view to blit it, so the whole thing played offscreen
+and the only reason anyone would have noticed is by looking. Found by reading the screenshot,
+then measured: the replay grid held 28 cells and its bitmap 47025 coloured pixels while the
+visible canvas sat at 4176 for the entire run. `onProgress` now asks for a frame on every
+position change, which also covers the scrubber, and `test/e2e/replay.mjs` counts coloured
+pixels on the visible canvas instead of reading the readout. It fails against the build
+without the fix, which is the only evidence a regression test is worth having.
+
+*Done when:* the replay paints on screen from empty, refuses placement while open, restores
+the live canvas on close, and the e2e check passes. ✅ — 4753 → 6399 px over 4.5 s, three
+covered buttons hidden, 167 client + 92 Python + 162 crypto checks green, bundle 49.2 KB.
+*Depends on:* T-22.
+*Estimate given:* 4–6 h. *Actual:* about 5 h, most of it on the check that lied.
+
 **T-21 · Where the interface answers** — ✅ **DONE 2026-09-02**
 *Done when:* `sagla.py` is clean and screenshots at 390 px wide are legible.
 *Depends on:* T-7.

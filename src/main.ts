@@ -9,6 +9,7 @@
 import { Grid } from "./canvas/grid.ts";
 import { FlatScene } from "./canvas/flat.ts";
 import { Scene } from "./canvas/scene.ts";
+import { Timelapse } from "./ui/timelapse.ts";
 import { View } from "./canvas/view.ts";
 import { EMPTY, PALETTE, RAMP_END, STEPS } from "./canvas/palette.ts";
 import { COLS, ROWS } from "./canvas/projection.ts";
@@ -181,6 +182,8 @@ function showCell(cell: number | null): void {
 
 function repaint(cx: number, cy: number): void {
   scene.invalidateCell(cx, cy);
+  // The replay is deliberately not touched: it is showing a past, and a live placement
+  // appearing in it would make the history wrong in front of the person reading it.
   // The other projection is repainted too when it exists. It is not on screen, so this is
   // invisible work — but skipping it means the side view shows the canvas as it was the last
   // time anyone looked at it, which is worse than the cost.
@@ -447,6 +450,12 @@ async function placePixel(cx: number, cy: number): Promise<void> {
   // One at a time. Concurrent placements each take a nonce, and the one that answers last is
   // holding the lower number — handled correctly now, but there is no reason to create the
   // race, and a person clicking into a queue cannot tell which click did what.
+  if (isReplaying()) {
+    // The canvas on screen is a past one. A click here would place a pixel on the live canvas
+    // that the person cannot see, at coordinates they chose from a different picture.
+    say("this is a replay — close it to place a pixel", "warn");
+    return;
+  }
   if (inFlight.size > 0) {
     showNudge(lastPointer.x, lastPointer.y, "inflight");
     return;
@@ -785,11 +794,101 @@ ramp.addEventListener("keydown", (event) => {
   buttons[next - 1]?.focus();
 });
 
-need<HTMLButtonElement>("#reset").addEventListener("click", () => view.fit());
+const resetButton = need<HTMLButtonElement>("#reset");
+resetButton.addEventListener("click", () => view.fit());
 
 /* Side view: the same canvas, tilted, with a contested cell standing up as a column of the
    colours it has been. Built on demand — the axonometric buffer is several times the size of
    the flat one, and most visits never ask for it. */
+/* ---- replay ------------------------------------------------------------------------ */
+
+const replayButton = need<HTMLButtonElement>("#replay");
+const scrub = need<HTMLElement>("#scrub");
+const scrubPlay = need<HTMLButtonElement>("#scrub-play");
+const scrubBar = need<HTMLInputElement>("#scrub-bar");
+const scrubAt = need<HTMLElement>("#scrub-at");
+const scrubWhen = need<HTMLElement>("#scrub-when");
+
+let replaying = false;
+const timelapse = new Timelapse({
+  onProgress(at, total, record) {
+    scrubBar.max = String(total);
+    scrubBar.value = String(at);
+    scrubAt.textContent = `${at} / ${total}`;
+    // The timestamp of the placement just applied, not a clock: this is a position in a
+    // history, and the useful question is "when was this", not "how far along am I".
+    scrubWhen.textContent = record ? record.ts.slice(0, 16).replace("T", " ") : "";
+    // The replay draws into its own bitmap; the view only blits when asked. Without this the
+    // whole thing plays offscreen — the counter counts up over a board that never changes.
+    view.request();
+  },
+  onEnd() {
+    scrubPlay.textContent = "▶";
+  },
+});
+
+/** Placing is refused while the replay is open — you would be painting onto the past. */
+function isReplaying(): boolean {
+  return replaying;
+}
+
+function setReplaying(on: boolean): void {
+  replaying = on;
+  replayButton.setAttribute("aria-pressed", String(replaying));
+  scrub.hidden = !replaying;
+  resetButton.hidden = replaying;
+  tilt.hidden = replaying;
+  // The scrubber spans the board and sits on top of these, so leaving them visible would
+  // leave three buttons that look live and cannot be clicked.
+  replayButton.hidden = replaying;
+
+  if (!replaying) {
+    timelapse.stop();
+    view.setSurface(showingTilt && tilted !== null ? tilted : scene);
+    say("");
+    return;
+  }
+
+  view.setSurface(timelapse.scene);
+  say("loading the history…");
+  void since(ARCHIVE_URL, 0)
+    .then((delta) => {
+      timelapse.load(delta.placements);
+      say(
+        delta.truncated
+          ? "replaying the most recent history — the archive returned as much as it will in one answer"
+          : "replaying every placement, from empty",
+      );
+      timelapse.play();
+      scrubPlay.textContent = "❚❚";
+    })
+    .catch((error: unknown) => {
+      say(
+        `the history could not be read: ${error instanceof Error ? error.message : "unknown"}`,
+        "warn",
+      );
+    });
+}
+
+replayButton.addEventListener("click", () => setReplaying(true));
+need<HTMLButtonElement>("#scrub-close").addEventListener("click", () => setReplaying(false));
+
+scrubPlay.addEventListener("click", () => {
+  if (timelapse.isPlaying) {
+    timelapse.stop();
+    scrubPlay.textContent = "▶";
+    return;
+  }
+  timelapse.play();
+  scrubPlay.textContent = "❚❚";
+});
+
+scrubBar.addEventListener("input", () => {
+  timelapse.stop();
+  scrubPlay.textContent = "▶";
+  timelapse.seek(Number(scrubBar.value));
+});
+
 const tilt = need<HTMLButtonElement>("#tilt");
 let tilted: Scene | null = null;
 let showingTilt = false;
@@ -816,6 +915,8 @@ if (__BENCH__) {
     view,
     scene,
     grid,
+    timelapse,
+    setReplaying,
     cols: COLS,
     rows: ROWS,
   };

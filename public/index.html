@@ -58,6 +58,20 @@
     <!-- Elevation is the only thing that shows a cell was fought over, and it cannot be
          seen face on. Off by default, because face on is where art is legible. -->
     <button class="reset reset--tilt" id="tilt" type="button" aria-pressed="false">side view</button>
+    <button class="reset reset--replay" id="replay" type="button" aria-pressed="false">replay</button>
+
+    <!-- The canvas arriving, from empty to now. The archive has always been able to answer
+         this; nothing here asks the room for anything. -->
+    <div class="scrub" id="scrub" hidden>
+      <button class="scrub__play" id="scrub-play" type="button" aria-label="Play or pause">▶</button>
+      <input class="scrub__bar" id="scrub-bar" type="range" min="0" max="0" value="0"
+             aria-label="Position in the replay">
+      <span class="scrub__at" id="scrub-at">0 / 0</span>
+      <span class="scrub__when" id="scrub-when"></span>
+      <!-- The way out lives in here. The bar spans the board and covers the button that
+           opened it, so without this a person could enter the replay and not leave. -->
+      <button class="scrub__close" id="scrub-close" type="button">close</button>
+    </div>
 
     <!-- What is under the pointer, at the pointer. The footer row still carries the pinned
          record and the proof button — a panel that follows the cursor cannot hold something

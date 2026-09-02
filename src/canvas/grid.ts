@@ -109,6 +109,19 @@ export class Grid {
     this.contest[i] = depth;
   }
 
+  /**
+   * Empty every cell, its tower with it.
+   *
+   * Used by the replay, which rewinds by rebuilding: a placement cannot be undone, because
+   * what is under it is whatever the placement before it left there and this holds no undo
+   * log. Rebuilding from empty is cheaper than carrying one.
+   */
+  clear(): void {
+    this.step.fill(EMPTY);
+    this.contest.fill(0);
+    this.layers.fill(EMPTY);
+  }
+
   /** Count of cells a player has marked. Used by the readout, not by the renderer. */
   painted(): number {
     let n = 0;

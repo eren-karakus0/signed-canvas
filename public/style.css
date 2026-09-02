@@ -404,6 +404,78 @@ body {
   left: calc(var(--s-2) + 132px);
 }
 
+.reset--replay {
+  left: calc(var(--s-2) + 249px);
+}
+
+/* The scrubber sits where the buttons are, and replaces them while it is open: a replay and
+   a live canvas are two different things to be looking at, and offering both at once invites
+   painting onto the past. */
+.scrub {
+  position: absolute;
+  left: var(--s-2);
+  right: var(--s-2);
+  bottom: var(--s-2);
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 8px 12px;
+  background: var(--current-color-20);
+  border: 1px solid var(--current-line);
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.scrub__play {
+  flex: none;
+  width: 26px;
+  height: 22px;
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--current-line);
+  color: var(--current-color-40);
+  line-height: 1;
+}
+
+.scrub__bar {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--current-color-40);
+  cursor: pointer;
+}
+
+.scrub__at {
+  flex: none;
+  color: var(--current-color-40);
+}
+
+.scrub__close {
+  flex: none;
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--current-line);
+  color: var(--current-color-100);
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+}
+
+.scrub__close:hover,
+.scrub__close:focus-visible {
+  color: var(--current-color-40);
+  border-color: var(--current-color-40);
+}
+
+.scrub__when {
+  flex: none;
+  opacity: 0.55;
+  min-width: 15ch;
+  text-align: right;
+}
+
 .reset[aria-pressed="true"] {
   color: var(--current-color-40);
   border-color: var(--current-color-40);
