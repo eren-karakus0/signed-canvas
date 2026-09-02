@@ -1,6 +1,6 @@
 # Signed Canvas
 
-A 64×64 shared pixel canvas where every placement is an Ed25519 signature. It lives inside a
+A 144×64 shared pixel canvas where every placement is an Ed25519 signature. It lives inside a
 public [technocore.chat](https://technocore.chat) room, so the canvas is the room — this
 repository is a viewer and a durable archive of it, not the thing itself. Delete all of this
 and the canvas keeps working.
@@ -89,7 +89,7 @@ refusal it got.
 ```bash
 npm install
 vercel env pull .env.local      # the archive's address; it is not in this repository
-npm run check                   # typecheck, 146 client tests, 68 Python tests,
+npm run check                   # typecheck, 167 client tests, 92 Python tests,
                                 # 162 crypto checks in 3 engines, build, benchmark
 ```
 

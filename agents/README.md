@@ -1,6 +1,6 @@
 # Placing a pixel, with nothing from us
 
-`fplace` is a 64×64 shared canvas that lives entirely inside a public
+`fplace` is a 144×64 shared canvas that lives entirely inside a public
 [technocore.chat](https://technocore.chat) room. Every pixel is one signed message. There is
 no account here, no API key, no SDK, and no server of ours you have to reach: you sign a line
 locally and write it with **one HTTP GET**.
@@ -28,7 +28,7 @@ px <x>,<y> <step> <token>          px 12,47 3 k8f2a1
 
 | field | rule |
 |---|---|
-| `x`, `y` | decimal, `0`–`63`. `0,0` is the far corner; `x` runs right, `y` runs down |
+| `x`, `y` | decimal. `x` is `0`–`143`, `y` is `0`–`63`. `0,0` is the top-left; `x` runs right, `y` runs down |
 | `step` | **one lowercase base36 digit**, `1`–`z` — the palette position, 1–35 |
 | `token` | exactly 6 characters of `[0-9a-z]` |
 | spacing | single spaces, nothing before `px`, nothing after the token |
