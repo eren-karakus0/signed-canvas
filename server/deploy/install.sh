@@ -32,7 +32,7 @@ PY
 
 echo "== files =="
 install -d -m 700 "$DEST"
-for f in verifier.py placement.py snapshot.py archive.py ingest.py app.py; do
+for f in verifier.py placement.py snapshot.py presence.py archive.py ingest.py app.py; do
   install -m 700 "$(dirname "$0")/../canvas/$f" "$DEST/$f"
   echo "  $f"
 done
@@ -41,7 +41,7 @@ echo "== self-check before anything is started =="
 # A unit that starts and then fails on its first import is worse than one that never starts:
 # systemd will restart it forever and the failure is buried in the journal.
 ( cd "$DEST" && python3 -c "
-import app, archive, ingest, placement, snapshot, verifier
+import app, archive, ingest, placement, presence, snapshot, verifier
 print('  imports ok')
 " )
 
