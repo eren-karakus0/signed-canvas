@@ -157,10 +157,23 @@ async function request(
   }
 }
 
-/** Messages newer than `since`, oldest first. */
-export async function read(room: string, since = 0): Promise<RoomMessage[]> {
+/**
+ * Messages newer than `since`, oldest first.
+ *
+ * `waitSeconds` holds the request open until something lands, up to ten seconds — the
+ * service's own long poll. It is the difference between a canvas that updates when you
+ * reload and one that updates when someone paints: a message arrives as soon as it is
+ * written, at the cost of one request per ten seconds rather than one per interval.
+ *
+ * An empty answer after the full wait is normal; re-issue with the same `since`.
+ */
+export async function read(room: string, since = 0, waitSeconds = 0): Promise<RoomMessage[]> {
+  const wait = waitSeconds > 0 ? `&wait=${Math.min(10, Math.floor(waitSeconds))}` : "";
   const { body } = await request(
-    `${BASE_URL}/r/${encodeURIComponent(room)}?since=${since}&limit=${READ_LIMIT}&format=json`,
+    `${BASE_URL}/r/${encodeURIComponent(room)}?since=${since}&limit=${READ_LIMIT}&format=json${wait}`,
+    // The request is meant to hang. A timeout shorter than the wait would abort every poll
+    // that did its job by waiting.
+    waitSeconds > 0 ? (waitSeconds + 10) * 1000 : REQUEST_TIMEOUT_MS,
   );
   const parsed = JSON.parse(body) as { messages?: RoomMessage[] };
   return parsed.messages ?? [];

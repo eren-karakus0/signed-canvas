@@ -18,6 +18,7 @@ import { IdentityPanel } from "./ui/identity-panel.ts";
 import { NonceCounter } from "./net/nonce.ts";
 import { lastNonce, place, token } from "./net/room.ts";
 import { snapshot } from "./net/archive.ts";
+import { type LivePlacement, follow } from "./net/live.ts";
 import { type Placement, cellHistory, describeOwner, exportProof } from "./net/proof.ts";
 import { copyText } from "./ui/clipboard.ts";
 
@@ -42,6 +43,7 @@ const ownerText = need<HTMLElement>("#r-owner");
 const basisText = need<HTMLElement>("#r-basis");
 const proofButton = need<HTMLButtonElement>("#proof");
 const proofHint = need<HTMLElement>("#proof-hint");
+const latestLine = need<HTMLElement>("#latest");
 
 let selectedStep = 1;
 let roomHead = 0;
@@ -407,6 +409,49 @@ async function loadCanvas(base: string): Promise<void> {
   provenance.textContent = `archive · seq ${state.seq} · ${state.signers} signers · ${proven}${stale}`;
 }
 
+/* ---- the room, as it happens ------------------------------------------------------- */
+
+/**
+ * Draw a placement that arrived from the room.
+ *
+ * Idempotent for our own pixels: they are painted optimistically on click and come back
+ * through the follower a moment later, and `Grid.place` reports no change when the colour is
+ * already there — so a cell is not counted as contested against itself.
+ */
+function applyIncoming(placement: LivePlacement): void {
+  const { cx, cy, step } = placement;
+  if (grid.place(cx, cy, step)) {
+    repaint(cx, cy);
+    // A cell whose owner was cached now has a different one. Dropping the entry is cheaper
+    // than refetching it, and the next hover asks again.
+    owners.delete(cy * N + cx);
+    if (view.hoveredCell === cy * N + cx) {
+      showCell(cy * N + cx);
+      inspectCell(cy * N + cx);
+    }
+  }
+  showLatest(placement);
+}
+
+/** Who painted the last pixel, and whether this browser checked the signature itself. */
+function showLatest(placement: LivePlacement): void {
+  const who =
+    placement.did === ""
+      ? "someone"
+      : `${placement.did.slice(0, 12)}…${placement.did.slice(-4)}`;
+  const mark = placement.verified ? "verified here" : "not re-verifiable";
+  latestLine.hidden = false;
+  latestLine.dataset["verified"] = String(placement.verified);
+  latestLine.innerHTML = "";
+  latestLine.append(
+    document.createTextNode(`${who} → ${pad2(placement.cx)},${pad2(placement.cy)} · `),
+  );
+  const span = document.createElement("span");
+  span.className = "latest__mark";
+  span.textContent = mark;
+  latestLine.append(span);
+}
+
 /* The network never blocks the interface. The ramp and the readout are built below, and a
    load that fails must not take the controls with it. */
 function startLoading(): void {
@@ -422,7 +467,20 @@ function startLoading(): void {
 
   provenance.textContent = "loading the archive…";
   void loadCanvas(ARCHIVE_URL)
-    .then(() => say(""))
+    .then(() => {
+      say("");
+      // Only after the snapshot: following from a sequence the canvas has not reached yet
+      // would paint the newest pixels onto a canvas missing the older ones.
+      follow(ROOM, roomHead, ARCHIVE_URL, {
+        onPlacement: applyIncoming,
+        onSeq: (seq) => {
+          roomHead = Math.max(roomHead, seq);
+        },
+        onStatus: (live, detail) => {
+          if (!live) say(`live updates paused — ${detail}`, "warn");
+        },
+      });
+    })
     .catch((error: unknown) => {
       provenance.textContent = "the archive could not be read";
       say(

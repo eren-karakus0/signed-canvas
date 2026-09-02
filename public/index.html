@@ -39,6 +39,9 @@
     <div class="head__right">
       <p class="micro" id="provenance">sample data · not yet reading the room</p>
       <p class="head__stat"><span id="r-painted">—</span> <span>placed</span></p>
+      <!-- Who painted the last pixel, as it happens. Not an `aria-live` region: on a busy
+           canvas it would narrate every placement over whatever the person was doing. -->
+      <p class="latest" id="latest" aria-hidden="true" hidden></p>
     </div>
   </header>
 

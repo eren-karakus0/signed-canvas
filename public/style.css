@@ -186,6 +186,24 @@ body {
   opacity: 0.5;
 }
 
+/* The most recent placement, live. Attribution is the point of this project, so it belongs
+   where the canvas's own numbers are rather than in a panel someone has to open. */
+.latest {
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  letter-spacing: 0.06em;
+  color: var(--current-color-100);
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Only on a placement whose signature was checked in this browser. The distinction is the
+   same one the readout makes between witnessed and attested, and it is not decoration. */
+.latest[data-verified="true"] .latest__mark {
+  color: var(--current-color-40);
+  font-weight: 600;
+}
+
 /* ---- stage ------------------------------------------------------------------------ */
 
 .stage {
