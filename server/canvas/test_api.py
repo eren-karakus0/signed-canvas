@@ -250,14 +250,47 @@ class Api(unittest.TestCase):
         self.assertIn("lag", body)
         self.assertEqual(body["placements"], 120)
 
-    def test_unknown_routes_and_bad_cells_are_refused(self) -> None:
-        # 96 wide, 64 tall: each axis gets its own case, and the far corner is checked
-        # as valid below so a bound that is wrong in both directions cannot pass.
-        for path in ("/nope", "/since/abc", f"/cell/{COLS}/0", f"/cell/0/{ROWS}"):
+    def test_unknown_routes_are_refused(self) -> None:
+        for path in ("/nope", "/since/abc", "/presence/nothex", "/presence/0" * 3):
             with self.subTest(path):
                 with self.assertRaises(urllib.error.HTTPError) as caught:
                     self.get(path)
-                self.assertIn(caught.exception.code, (400, 404))
+                self.assertEqual(caught.exception.code, 404)
+
+    def test_a_cell_outside_the_canvas_is_refused_as_a_bad_cell(self) -> None:
+        """400, not 404.
+
+        This used to accept either, and that is how the route pattern came to be stale: it
+        matched two digits while the canvas grew to 144 wide, so `/cell/144/0` never reached
+        the handler and answered 404 for the wrong reason. Every column past 99 answered 404
+        too, which is a third of the board with no proof export, and this test passed
+        throughout. Distinguishing the two codes is what makes it a test of the bounds.
+        """
+        for path in (f"/cell/{COLS}/0", f"/cell/0/{ROWS}", f"/cell/{COLS}/{ROWS}"):
+            with self.subTest(path):
+                with self.assertRaises(urllib.error.HTTPError) as caught:
+                    self.get(path)
+                self.assertEqual(caught.exception.code, 400)
+
+    def test_every_column_and_row_is_reachable(self) -> None:
+        """The last cell on each axis answers, not just the first.
+
+        Walking the corners rather than one cell: a pattern that is too narrow, an off-by-one
+        bound, and an axis swap each survive a test that only ever asks for 0,0.
+        """
+        for cx, cy in ((0, 0), (COLS - 1, 0), (0, ROWS - 1), (COLS - 1, ROWS - 1)):
+            with self.subTest(cell=(cx, cy)):
+                body = self.get(f"/cell/{cx}/{cy}")
+                self.assertEqual((body["cx"], body["cy"]), (cx, cy))
+                self.assertIsInstance(body["placements"], list)
+
+    def test_presence_counts_viewers_and_forgets_them(self) -> None:
+        """The route, end to end. The expiry itself is tested in test_presence.py."""
+        first = self.get("/presence/" + "a" * 16)
+        self.assertEqual(first["viewers"], 1)
+        self.assertFalse(first["capped"])
+        self.assertEqual(self.get("/presence/" + "a" * 16)["viewers"], 1)
+        self.assertEqual(self.get("/presence/" + "b" * 16)["viewers"], 2)
 
     def test_witness_refuses_a_malformed_or_wrong_signature(self) -> None:
         status, body = self.post("/witness", {"seq": 1, "sig": "short"})

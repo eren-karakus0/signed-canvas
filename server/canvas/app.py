@@ -1,11 +1,12 @@
 """The archive's read API.
 
-Five routes and nothing else. It binds loopback only: ADR 0001 put a Cloudflare Tunnel in
+A handful of routes and nothing else. It binds loopback only: ADR 0001 put a Cloudflare Tunnel in
 front and opened no port, so anything reachable from outside arrives through cloudflared.
 
     GET  /snapshot        the canvas as two packed planes, plus the seq it is current to
     GET  /since/<seq>     placements newer than <seq>, oldest first
     GET  /cell/<x>/<y>    every placement in one cell, oldest first  (FR-6)
+    GET  /presence/<id>   record that a viewer is here; answer how many are
     POST /relay           forward one already-signed placement to technocore.chat
     POST /witness         attach a signature to an archived placement (FR-7)
     GET  /health          what the archive holds, including ingest lag
@@ -43,6 +44,7 @@ import json
 import logging
 import re
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -52,6 +54,7 @@ import urllib.request
 
 from archive import Archive, ArchiveError
 from placement import parse as parse_placement
+from presence import VIEWER_PATTERN, Presence
 from snapshot import COLS, MAX_STACK, ROWS, encode, pack, pack_stack
 from verifier import (
     DID_PATTERN,
@@ -75,7 +78,10 @@ SINCE_LIMIT = 2000
 CACHE_SECONDS = 2  # short: the edge absorbs the load, but a stale canvas reads as a bug
 
 _SINCE = re.compile(r"^/since/(\d{1,19})$")
-_CELL = re.compile(r"^/cell/(\d{1,2})/(\d{1,2})$")
+# Three digits: the canvas is 144 wide. This said two for as long as it was 96, which
+# made every column past 99 answer 404 — the proof export for a third of the board.
+_CELL = re.compile(r"^/cell/(\d{1,3})/(\d{1,3})$")
+_PRESENCE = re.compile(r"^/presence/([0-9a-f]{16})$")
 
 log = logging.getLogger("canvas.app")
 
@@ -85,6 +91,9 @@ class Handler(BaseHTTPRequestHandler):
     sys_version = ""
 
     archive_path: Path = Path("canvas.db")
+    # One tracker for the process, shared by every connection thread. Class-level for the
+    # same reason `archive_path` is: BaseHTTPRequestHandler is instantiated per request.
+    presence: Presence = Presence()
 
     def log_message(self, fmt: str, *args: object) -> None:
         log.info("%s %s", self.address_string(), fmt % args)
@@ -146,6 +155,9 @@ class Handler(BaseHTTPRequestHandler):
             match = _CELL.match(path)
             if match:
                 return self._cell(int(match.group(1)), int(match.group(2)))
+            match = _PRESENCE.match(path)
+            if match:
+                return self._presence(match.group(1))
         except ArchiveError as exc:
             return self._fail(409, str(exc))
         except Exception:
@@ -407,6 +419,17 @@ class Handler(BaseHTTPRequestHandler):
             },
             cache=CACHE_SECONDS,
         )
+
+    def _presence(self, viewer: str) -> None:
+        """Record that a viewer is here, and answer how many are.
+
+        A GET rather than a POST because it is what a browser can send with the least
+        ceremony and there is nothing here worth a preflight. It is not a read: it writes a
+        last-seen time. Nothing about the caller is stored beyond the id it invented for
+        itself this page load, and nothing survives a restart.
+        """
+        count, capped = type(self).presence.beat(viewer, time.time())
+        self._send(200, {"viewers": count, "capped": capped})
 
     def _health(self) -> None:
         with self._open() as archive:

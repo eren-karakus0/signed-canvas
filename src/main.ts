@@ -15,6 +15,7 @@ import { EMPTY, PALETTE, RAMP_END, STEPS } from "./canvas/palette.ts";
 import { COLS, ROWS } from "./canvas/projection.ts";
 import { formatPlacement, parsePlacement } from "./canvas/wire.ts";
 import { ARCHIVE_URL, ROOM, hasArchive, relayUrl } from "./config.ts";
+import { follow as followPresence } from "./net/presence.ts";
 import { loadOrCreate } from "./identity/store.ts";
 import { IdentityPanel } from "./ui/identity-panel.ts";
 import { NonceCounter } from "./net/nonce.ts";
@@ -44,6 +45,10 @@ const canvas = need<HTMLCanvasElement>("#canvas");
 const stage = need<HTMLElement>(".board");
 const statusLine = need<HTMLElement>("#status");
 const provenance = need<HTMLElement>("#provenance");
+// Declared with the other header elements rather than beside the scrubber it was added
+// next to: the presence follower starts during module setup, and a const declared below
+// its own use is a temporal dead zone waiting for the first callback to arrive early.
+const watching = need<HTMLElement>("#watching");
 const cellText = need<HTMLElement>("#r-cell");
 const stepText = need<HTMLElement>("#r-step");
 const contestText = need<HTMLElement>("#r-contest");
@@ -724,6 +729,19 @@ function startLoading(): void {
     );
     return;
   }
+
+  /* Started before the snapshot rather than after it.
+   *
+   * Unlike the room follower, this does not depend on the canvas being loaded — it counts
+   * people looking, and someone staring at a loading board is looking. Waiting would also
+   * make the first count arrive late for exactly the visitors most likely to leave. */
+  followPresence(ARCHIVE_URL, {
+    onCount(count, capped) {
+      // Empty, not "0 watching", when the count is unknown: this is the one figure here that
+      // is not evidence, and guessing at it is how a page starts lying quietly.
+      watching.textContent = count === null ? "" : `${count}${capped ? "+" : ""} watching`;
+    },
+  });
 
   provenance.textContent = "loading the archive…";
   void loadCanvas(ARCHIVE_URL)
