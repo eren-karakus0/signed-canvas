@@ -51,6 +51,27 @@
     <div class="stage__corner" aria-hidden="true"></div>
     <button class="reset" id="reset" type="button">reset view</button>
 
+    <!-- What is under the pointer, at the pointer. The footer row still carries the pinned
+         record and the proof button — a panel that follows the cursor cannot hold something
+         you have to click. -->
+    <div class="tip" id="tip" aria-hidden="true" hidden>
+      <p class="tip__cell"><span id="tip-cell">—</span></p>
+      <dl class="tip__rows">
+        <div><dt>step</dt><dd id="tip-step">—</dd></div>
+        <div><dt>contested</dt><dd id="tip-contest">—</dd></div>
+        <div><dt>by</dt><dd id="tip-owner">…</dd></div>
+        <div><dt>basis</dt><dd id="tip-basis">—</dd></div>
+      </dl>
+    </div>
+
+    <!-- Why the click did nothing, where the click happened. The status line said it once, in
+         the corner of the eye, which is not where someone is looking after clicking. -->
+    <div class="nudge" id="nudge" aria-hidden="true" hidden>
+      <p class="nudge__count"><span id="nudge-seconds">—</span><span class="nudge__unit">s</span></p>
+      <p class="nudge__what" id="nudge-what">before the next pixel</p>
+      <span class="nudge__track"><span class="nudge__bar" id="nudge-bar"></span></span>
+    </div>
+
     <!-- Blocks placement on the visit where the key is created. Friction, once, on purpose. -->
     <div class="gate" id="gate" role="dialog" aria-labelledby="gate-title" hidden>
       <div class="gate__panel">

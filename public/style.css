@@ -271,6 +271,111 @@ body {
   outline: none;
 }
 
+/* ---- panels that float over the canvas -------------------------------------------- */
+
+/* The identity forbids an ink-coloured element drawn *on* the canvas, because ramp step 14
+   sits 1.6 ΔE from the ink and the two would be indistinguishable. These are panels, not
+   marks: a surface, a border and a corner bracket say "interface" before the colour does. */
+.tip,
+.nudge {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  background: var(--current-color-20);
+  border: 1px solid var(--current-line);
+  border-radius: var(--radius);
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.tip::before,
+.nudge::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 5px;
+  height: 5px;
+  border-left: 1px solid var(--current-color-40);
+  border-top: 1px solid var(--current-color-40);
+}
+
+.tip {
+  padding: 9px 12px 8px;
+  min-width: 172px;
+  line-height: 1.5;
+}
+
+.tip__cell {
+  color: var(--current-color-40);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  margin-bottom: 4px;
+}
+
+.tip__rows div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.tip__rows dt {
+  opacity: 0.55;
+}
+
+.tip__rows dd {
+  text-align: right;
+}
+
+.tip__rows dd[data-basis="witnessed"] {
+  color: var(--current-color-40);
+  font-weight: 600;
+}
+
+/* The wait, where the click was. Centred on the pointer rather than offset: it is a refusal,
+   and a refusal that appears beside where you looked is a refusal you can miss. */
+.nudge {
+  padding: 12px 16px 11px;
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+
+.nudge__count {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--current-color-40);
+}
+
+.nudge__unit {
+  font-size: 13px;
+  opacity: 0.6;
+  margin-left: 1px;
+}
+
+.nudge__what {
+  margin-top: 5px;
+  opacity: 0.7;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.nudge__track {
+  display: block;
+  margin-top: 8px;
+  height: 2px;
+  background: var(--current-line);
+}
+
+.nudge__bar {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--current-color-40);
+  transform-origin: left center;
+}
+
 /* ---- foot: the ramp and the readout ----------------------------------------------- */
 
 /* Two rows, not six. The controls were 191px tall at every viewport — more than the canvas

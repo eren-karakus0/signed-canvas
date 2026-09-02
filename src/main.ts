@@ -33,6 +33,7 @@ const pad2 = (n: number): string => String(n).padStart(2, "0");
 const grid = new Grid();
 const scene = new Scene(grid);
 const canvas = need<HTMLCanvasElement>("#canvas");
+const stage = need<HTMLElement>(".stage");
 const statusLine = need<HTMLElement>("#status");
 const provenance = need<HTMLElement>("#provenance");
 const cellText = need<HTMLElement>("#r-cell");
@@ -62,44 +63,85 @@ const inFlight = new Set<number>();
  * It is a pace, chosen so a canvas is composed rather than sprayed. */
 const PLACE_COOLDOWN_MS = 10_000;
 let readyToPlaceAt = 0;
-let cooldownTimer: number | undefined;
 
 const cooldownBox = need<HTMLElement>("#cooldown");
 const cooldownText = need<HTMLElement>("#cooldown-text");
 const cooldownBar = need<HTMLElement>("#cooldown-bar");
+const nudge = need<HTMLElement>("#nudge");
+const nudgeSeconds = need<HTMLElement>("#nudge-seconds");
+const nudgeWhat = need<HTMLElement>("#nudge-what");
+const nudgeBar = need<HTMLElement>("#nudge-bar");
 
 /**
- * Run the visible countdown to the next placement.
+ * Paint the wait, wherever it is shown, from the clock rather than from a schedule.
  *
- * The number is stepped once a second; the bar is handed the whole duration and left to
- * sweep, so the wait reads as passing rather than as a value being rewritten. Both are
- * outside the `aria-live` status line on purpose — a number that changes every second would
- * be announced every second, and the status line already says the wait once, in words.
+ * Driven by frames and recomputed from `Date.now()` every one of them. The first version
+ * stepped a `setInterval` and handed the bar a ten-second CSS transition, and both drift the
+ * moment the tab stops being the front one: browsers clamp background timers and a transition
+ * that was started before the tab was hidden finishes while nobody is watching. Coming back
+ * to a counter that had stopped is worse than no counter, because it is still a number and
+ * still looks like an answer.
+ *
+ * Frames stop too when the tab is hidden — but they stop *and resume*, and the value is
+ * derived, so the first frame back is correct rather than stale.
  */
-function startCooldown(): void {
-  window.clearInterval(cooldownTimer);
+function paintWait(): void {
+  const left = readyToPlaceAt - Date.now();
+  if (left <= 0) {
+    cooldownBox.hidden = true;
+    if (nudge.dataset["reason"] === "cooldown") nudge.hidden = true;
+    return;
+  }
+  const seconds = String(Math.ceil(left / 1000));
+  const fraction = Math.max(0, Math.min(1, left / PLACE_COOLDOWN_MS));
+
   cooldownBox.hidden = false;
+  cooldownText.textContent = `next pixel in ${seconds}s`;
+  cooldownBar.style.transform = `scaleX(${fraction})`;
 
-  // Reset to full, force the style to settle, then let it run: without the reflow the
-  // browser coalesces both writes and the bar jumps straight to empty.
-  cooldownBar.style.transition = "none";
-  cooldownBar.style.transform = "scaleX(1)";
-  void cooldownBar.offsetWidth;
-  cooldownBar.style.transition = `transform ${PLACE_COOLDOWN_MS}ms linear`;
-  cooldownBar.style.transform = "scaleX(0)";
+  if (!nudge.hidden && nudge.dataset["reason"] === "cooldown") {
+    nudgeSeconds.textContent = seconds;
+    nudgeBar.style.transform = `scaleX(${fraction})`;
+  }
+  requestAnimationFrame(paintWait);
+}
 
-  const tick = (): void => {
-    const left = Math.ceil((readyToPlaceAt - Date.now()) / 1000);
-    if (left <= 0) {
-      window.clearInterval(cooldownTimer);
-      cooldownTimer = undefined;
-      cooldownBox.hidden = true;
-      return;
-    }
-    cooldownText.textContent = `next pixel in ${left}s`;
-  };
-  tick();
-  cooldownTimer = window.setInterval(tick, 250);
+// A tab that comes back mid-wait has had no frames, so nothing has repainted. Ask for one.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && readyToPlaceAt > Date.now()) paintWait();
+});
+
+/**
+ * Say why a click did nothing, at the click.
+ *
+ * The status line said it once, in the corner of the eye — which is not where someone is
+ * looking a moment after clicking a cell.
+ */
+function showNudge(
+  clientX: number,
+  clientY: number,
+  reason: "cooldown" | "inflight" | "same",
+): void {
+  const box = stage.getBoundingClientRect();
+  nudge.style.left = `${clientX - box.left}px`;
+  nudge.style.top = `${clientY - box.top}px`;
+  nudge.dataset["reason"] = reason;
+  nudge.hidden = false;
+
+  if (reason !== "cooldown") {
+    nudgeSeconds.textContent = reason === "same" ? "=" : "…";
+    nudgeWhat.textContent =
+      reason === "same"
+        ? "already this colour"
+        : "the last pixel is still being written";
+    nudgeBar.style.transform = "scaleX(1)";
+    window.setTimeout(() => {
+      if (nudge.dataset["reason"] === reason) nudge.hidden = true;
+    }, 1800);
+    return;
+  }
+  nudgeWhat.textContent = "before the next pixel";
+  paintWait();
 }
 
 function say(message: string, tone: "info" | "ok" | "warn" = "info"): void {
@@ -160,6 +202,76 @@ async function seedNonceFromRoom(did: string): Promise<void> {
 }
 
 
+/* ---- what is under the pointer, at the pointer ------------------------------------- */
+
+const tip = need<HTMLElement>("#tip");
+const tipCell = need<HTMLElement>("#tip-cell");
+const tipStep = need<HTMLElement>("#tip-step");
+const tipContest = need<HTMLElement>("#tip-contest");
+const tipOwner = need<HTMLElement>("#tip-owner");
+const tipBasis = need<HTMLElement>("#tip-basis");
+
+/** Where the pointer last was, in client coordinates. Both floating panels are placed by it. */
+const lastPointer = { x: 0, y: 0 };
+
+const TIP_OFFSET = 18;
+
+/** Put the tooltip beside the pointer, flipped near an edge so it never leaves the stage. */
+function positionTip(clientX: number, clientY: number): void {
+  const box = stage.getBoundingClientRect();
+  const size = tip.getBoundingClientRect();
+  let x = clientX - box.left + TIP_OFFSET;
+  let y = clientY - box.top + TIP_OFFSET;
+  if (x + size.width > box.width - 4) x = clientX - box.left - size.width - TIP_OFFSET;
+  if (y + size.height > box.height - 4) y = clientY - box.top - size.height - TIP_OFFSET;
+  tip.style.left = `${Math.max(4, x)}px`;
+  tip.style.top = `${Math.max(4, y)}px`;
+}
+
+/** Fill the tooltip for a cell, or hide it when there is nothing under the pointer. */
+function showTip(cell: number | null): void {
+  if (cell === null || grid.step[cell] === EMPTY) {
+    tip.hidden = true;
+    return;
+  }
+  const state = grid.get(cell % N, Math.floor(cell / N));
+  if (!state) return;
+  tip.hidden = false;
+  tipCell.textContent = `${pad2(state.cx)}, ${pad2(state.cy)}`;
+  tipStep.textContent = pad2(state.step);
+  tipContest.textContent = state.contest === 0 ? "never" : `${state.contest}×`;
+
+  // Ownership is fetched per cell and cached, so it is here immediately for a cell already
+  // looked at and a moment later for one that is not. Saying "reading…" rather than "—"
+  // distinguishes "we do not know yet" from "nobody".
+  const known = owners.get(cell);
+  if (known === undefined) {
+    tipOwner.textContent = "reading…";
+    tipBasis.textContent = "—";
+    delete tipBasis.dataset["basis"];
+    return;
+  }
+  if (known === null) {
+    tipOwner.textContent = "unclaimed";
+    tipBasis.textContent = "—";
+    delete tipBasis.dataset["basis"];
+    return;
+  }
+  tipOwner.textContent = `${known.did.slice(8, 20)}…`;
+  tipBasis.textContent = known.witnessed ? "witnessed" : "attested";
+  tipBasis.dataset["basis"] = known.witnessed ? "witnessed" : "attested";
+}
+
+canvas.addEventListener("pointermove", (event) => {
+  lastPointer.x = event.clientX;
+  lastPointer.y = event.clientY;
+  if (!tip.hidden) positionTip(event.clientX, event.clientY);
+});
+
+canvas.addEventListener("pointerleave", () => {
+  tip.hidden = true;
+});
+
 /* ---- who owns a cell, and on what basis ------------------------------------------- */
 
 /* Ownership needs the DID, and the snapshot carries only colours — 2,048 bytes of palette
@@ -171,6 +283,7 @@ let hoverTimer: number | undefined;
 let inspecting: { cell: number; top: Placement } | null = null;
 
 function clearOwner(message: string): void {
+  showCell(null);
   ownerText.textContent = "—";
   basisText.textContent = "—";
   delete basisText.dataset["basis"];
@@ -184,6 +297,9 @@ function showOwner(cell: number, top: Placement | null): void {
     clearOwner("nothing placed here yet");
     return;
   }
+  // Every field in the row describes this one cell, including the ones the pointer used to
+  // drive.
+  showCell(cell);
   ownerText.textContent = describeOwner(top).split(" · ")[0] ?? "—";
   basisText.textContent = top.witnessed ? "witnessed" : "attested";
   basisText.dataset["basis"] = top.witnessed ? "witnessed" : "attested";
@@ -229,7 +345,11 @@ function inspectCell(cell: number | null): void {
         const top = record.placements.at(-1) ?? null;
         owners.set(cell, top);
         // The pointer may have moved on while this was in flight; only paint if it did not.
-        if (view.hoveredCell === cell) showOwner(cell, top);
+        if (view.hoveredCell === cell) {
+          showOwner(cell, top);
+          // The tooltip said "reading…" while this was in flight. It is not reading now.
+          showTip(cell);
+        }
       })
       .catch(() => {
         proofHint.textContent = "the record could not be read";
@@ -256,8 +376,13 @@ proofButton.addEventListener("click", () => {
 
 const view = new View(canvas, scene, {
   onHover(cell) {
-    showCell(cell);
+    // The footer row is deliberately not updated here. It follows the *pinned* inspection,
+    // and the tooltip follows the pointer — mixing them put the hovered cell's number beside
+    // the pinned cell's owner, so the row read "cell 45,24 · step empty · owner …" about two
+    // different cells at once.
     inspectCell(cell);
+    showTip(cell);
+    if (cell !== null) positionTip(lastPointer.x, lastPointer.y);
   },
   onActivate(cell) {
     void placePixel(cell % N, Math.floor(cell / N));
@@ -278,12 +403,11 @@ async function placePixel(cx: number, cy: number): Promise<void> {
   // holding the lower number — handled correctly now, but there is no reason to create the
   // race, and a person clicking into a queue cannot tell which click did what.
   if (inFlight.size > 0) {
-    say("one pixel at a time — the last one is still being written", "warn");
+    showNudge(lastPointer.x, lastPointer.y, "inflight");
     return;
   }
-  const waitMs = readyToPlaceAt - Date.now();
-  if (waitMs > 0) {
-    say(`${Math.ceil(waitMs / 1000)}s before the next pixel`, "warn");
+  if (readyToPlaceAt > Date.now()) {
+    showNudge(lastPointer.x, lastPointer.y, "cooldown");
     return;
   }
 
@@ -304,7 +428,13 @@ async function placePixel(cx: number, cy: number): Promise<void> {
 
   const previousStep = grid.step[index]!;
   const previousContest = grid.contest[index]!;
-  if (!grid.place(cx, cy, selectedStep)) return;
+  if (!grid.place(cx, cy, selectedStep)) {
+    // The cell already holds this colour, so the write would be a no-op — and the room's
+    // duplicate filter would likely refuse it anyway. Silence here was its own small bug:
+    // a click that does nothing and says nothing is indistinguishable from one that broke.
+    showNudge(lastPointer.x, lastPointer.y, "same");
+    return;
+  }
 
   inFlight.add(index);
   repaint(cx, cy);
@@ -348,7 +478,7 @@ async function placePixel(cx: number, cy: number): Promise<void> {
     }
     roomHead = Math.max(roomHead, outcome.seq);
     readyToPlaceAt = Date.now() + PLACE_COOLDOWN_MS;
-    startCooldown();
+    paintWait();
     // Name the lane when it was not the relay. The pixel is equally placed and equally
     // provable either way — we hold the signature — but it says why the archive has not
     // caught up yet, which is otherwise an unexplained few seconds.
