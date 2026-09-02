@@ -17,6 +17,7 @@ import { formatPlacement, parsePlacement } from "./canvas/wire.ts";
 import { ARCHIVE_URL, ROOM, hasArchive, relayUrl } from "./config.ts";
 import { follow as followPresence } from "./net/presence.ts";
 import { leaders } from "./net/leaders.ts";
+import { offerCard, shareCard } from "./ui/card.ts";
 import { loadOrCreate } from "./identity/store.ts";
 import { IdentityPanel } from "./ui/identity-panel.ts";
 import { NonceCounter } from "./net/nonce.ts";
@@ -50,6 +51,7 @@ const provenance = need<HTMLElement>("#provenance");
 // next to: the presence follower starts during module setup, and a const declared below
 // its own use is a temporal dead zone waiting for the first callback to arrive early.
 const watching = need<HTMLElement>("#watching");
+const shareButton = need<HTMLButtonElement>("#share");
 const board = need<HTMLElement>("#holding");
 const boardList = need<HTMLElement>("#holding-list");
 const cellText = need<HTMLElement>("#r-cell");
@@ -168,6 +170,22 @@ function showNudge(
 function say(message: string, tone: "info" | "ok" | "warn" = "info"): void {
   statusLine.textContent = message;
   statusLine.dataset["tone"] = tone;
+}
+
+/* How many painted cells rest on a signature this page has verified.
+ *
+ * Kept rather than recomputed because the client does not hold a per-cell witnessed flag for
+ * the whole canvas — the snapshot packs it, decodes it, and the grid keeps only the colour.
+ * Seeded from the snapshot and moved by the two things that can move it: a pixel placed here,
+ * whose signature we computed ourselves, and one arriving from the room with a signature that
+ * verified in this browser. */
+let witnessedHere = 0;
+
+function witnessedCount(): number {
+  // Never more than are painted. The two are counted from different places and a card that
+  // said "500 witnessed of 496 placed" would be obviously wrong in the one artefact meant to
+  // be looked at by people who do not know the project.
+  return Math.min(witnessedHere, grid.painted());
 }
 
 function showPainted(): void {
@@ -531,6 +549,7 @@ async function placePixel(cx: number, cy: number): Promise<void> {
       payload: `${ROOM}|${outcome.nonce}|${outcome.text}`,
       sig: outcome.signature,
     });
+    witnessedHere += 1;
     // Both halves of the readout, not just the ownership half. The pointer has not moved, so
     // nothing else will refresh the step and the contest count, and the row would go on
     // reading "step empty" beside the owner of a pixel that is plainly on screen.
@@ -618,6 +637,8 @@ async function loadCanvas(base: string): Promise<void> {
       // A feed that failed to seed is a quiet loss, not a broken canvas.
     });
 
+  witnessedHere = state.witnessed;
+
   const stale = state.lag > 0 ? ` · ${state.lag} behind the room` : "";
   const proven =
     state.witnessed === 0
@@ -637,6 +658,9 @@ async function loadCanvas(base: string): Promise<void> {
  */
 function applyIncoming(placement: LivePlacement): void {
   const { cx, cy, step } = placement;
+  // Counted on arrival, not on the next snapshot: the follower verified this signature in
+  // this browser, which is the same standard the archive's own count uses.
+  if (placement.verified) witnessedHere += 1;
   if (grid.place(cx, cy, step)) {
     repaint(cx, cy);
     // A cell whose owner was cached now has a different one. Dropping the entry is cheaper
@@ -933,6 +957,35 @@ function setReplaying(on: boolean): void {
       );
     });
 }
+
+shareButton.addEventListener("click", () => {
+  // Built from the grid this page is already showing rather than re-fetched: the card should
+  // be a picture of what the person is looking at, including any pixel they placed a second
+  // ago that the archive has not caught up with.
+  shareButton.disabled = true;
+  const painted = grid.step.reduce((n, step) => (step === 0 ? n : n + 1), 0);
+  void shareCard(grid, {
+    painted,
+    witnessed: witnessedCount(),
+    seq: roomHead,
+    url: location.host,
+  })
+    .then((blob) => offerCard(blob, `signed-canvas-${roomHead}.png`))
+    .then((where) => {
+      // Says which one actually happened. "Copied" after a download is how someone ends up
+      // pasting an empty clipboard into a post.
+      say(where === "clipboard" ? "card copied — paste it into a post" : "card saved", "ok");
+    })
+    .catch((error: unknown) => {
+      say(
+        `the card could not be made: ${error instanceof Error ? error.message : "unknown"}`,
+        "warn",
+      );
+    })
+    .finally(() => {
+      shareButton.disabled = false;
+    });
+});
 
 replayButton.addEventListener("click", () => setReplaying(true));
 need<HTMLButtonElement>("#scrub-close").addEventListener("click", () => setReplaying(false));
