@@ -915,8 +915,6 @@ if (__BENCH__) {
     view,
     scene,
     grid,
-    timelapse,
-    setReplaying,
     cols: COLS,
     rows: ROWS,
   };
