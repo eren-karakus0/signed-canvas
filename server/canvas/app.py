@@ -7,6 +7,7 @@ front and opened no port, so anything reachable from outside arrives through clo
     GET  /since/<seq>     placements newer than <seq>, oldest first
     GET  /cell/<x>/<y>    every placement in one cell, oldest first  (FR-6)
     GET  /presence/<id>   record that a viewer is here; answer how many are
+    GET  /leaders         the keys holding the most cells
     POST /relay           forward one already-signed placement to technocore.chat
     POST /witness         attach a signature to an archived placement (FR-7)
     GET  /health          what the archive holds, including ingest lag
@@ -83,6 +84,10 @@ _SINCE = re.compile(r"^/since/(\d{1,19})$")
 _CELL = re.compile(r"^/cell/(\d{1,3})/(\d{1,3})$")
 _PRESENCE = re.compile(r"^/presence/([0-9a-f]{16})$")
 
+# Long enough to be a board, short enough that nobody scrolls it. The canvas has 19
+# signers; a top ten is most of them and still reads as a ranking.
+LEADER_LIMIT = 10
+
 log = logging.getLogger("canvas.app")
 
 
@@ -158,6 +163,8 @@ class Handler(BaseHTTPRequestHandler):
             match = _PRESENCE.match(path)
             if match:
                 return self._presence(match.group(1))
+            if path == "/leaders":
+                return self._leaders()
         except ArchiveError as exc:
             return self._fail(409, str(exc))
         except Exception:
@@ -430,6 +437,30 @@ class Handler(BaseHTTPRequestHandler):
         """
         count, capped = type(self).presence.beat(viewer, time.time())
         self._send(200, {"viewers": count, "capped": capped})
+
+    def _leaders(self) -> None:
+        """Who is holding the most of the canvas.
+
+        Aggregated here rather than in the browser: the alternative is every visitor
+        downloading the whole history to count it, which is the same answer computed
+        thousands of times from a much larger download.
+        """
+        with self._open() as archive:
+            leaders = archive.leaders(LEADER_LIMIT)
+        self._send(
+            200,
+            {
+                "leaders": [
+                    {
+                        "did": leader.did,
+                        "held": leader.held,
+                        "placed": leader.placed,
+                        "witnessed": leader.witnessed,
+                    }
+                    for leader in leaders
+                ]
+            },
+        )
 
     def _health(self) -> None:
         with self._open() as archive:

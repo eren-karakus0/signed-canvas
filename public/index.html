@@ -127,6 +127,15 @@
       </p>
       <ol class="feed" id="live-feed"></ol>
       <p class="feed__empty" id="live-empty">waiting for the next pixel…</p>
+
+      <!-- Ranked by cells still held, not by placements made. Repainting one cell four
+           hundred times is many placements and one pixel, and a board that rewarded it would
+           be encouraging the one habit a shared canvas does not need. Hidden until it has an
+           answer: an empty ranking looks like a ranking with nobody in it. -->
+      <section class="holding" id="holding" hidden>
+        <p class="side__head"><span>holding</span></p>
+        <ol class="holding__list" id="holding-list"></ol>
+      </section>
     </aside>
   </section>
 

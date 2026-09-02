@@ -268,6 +268,56 @@ body {
   text-transform: none;
 }
 
+/* The standings take what they need and the feed takes the rest, rather than the two splitting
+   the panel evenly: the feed is the thing that moves, and a ranking that pushed it down to
+   three rows would trade the live part of a live panel for a table that changes hourly. */
+.holding {
+  flex: none;
+  border-top: 1px solid var(--current-line);
+  padding-top: var(--s-2);
+  margin-top: var(--s-2);
+}
+
+.holding__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.holding__row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: var(--s-2);
+  font-family: var(--font-micro);
+  font-size: 11px;
+}
+
+.holding__rank {
+  opacity: 0.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.holding__did {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+/* The number is the point of the row, so it is the one part at full strength. */
+.holding__held {
+  font-variant-numeric: tabular-nums;
+}
+
+.holding__row--mine .holding__did,
+.holding__row--mine .holding__held {
+  color: var(--current-color-40);
+  opacity: 1;
+}
+
 .feed {
   list-style: none;
   overflow-y: auto;

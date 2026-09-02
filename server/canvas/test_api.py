@@ -244,6 +244,68 @@ class Api(unittest.TestCase):
         )
         self.assertFalse(first["witnessed"])
 
+    def test_a_repainter_ranks_below_a_holder(self) -> None:
+        """The distinction the board exists to make, with a case that can tell them apart.
+
+        The random fixture cannot: nobody in it repaints, so ranking by placements and ranking
+        by cells held produce the same order and a board sorted the wrong way passes. So this
+        builds the disagreement on purpose — one key with forty placements in a single cell,
+        another with five cells and five placements — and asserts the holder wins.
+        """
+        repainter = "did:key:z6MkrepaintERbGvXR7cAtGkWkHNzhoJ1AuqDVN3rYwGnDaaa"
+        holder = "did:key:z6MkholderGvXR7cAtGkWkHNzhoJ1AuqDVN3rYwGnDbbbbbbb"
+        # Well past the fixture's cells so neither key is overwritten by it or by the other.
+        rows = [
+            _message(1000 + n, COLS - 1, ROWS - 1, 1 + (n % 15), repainter) for n in range(40)
+        ]
+        rows += [_message(1100 + n, COLS - 2 - n, ROWS - 1, 3, holder) for n in range(5)]
+        with Archive(self.path) as archive:
+            archive.apply_batch(rows)
+
+        leaders = {leader["did"]: leader for leader in self.get("/leaders")["leaders"]}
+        self.assertIn(repainter, leaders)
+        self.assertIn(holder, leaders)
+        self.assertEqual((leaders[repainter]["held"], leaders[repainter]["placed"]), (1, 40))
+        self.assertEqual((leaders[holder]["held"], leaders[holder]["placed"]), (5, 5))
+
+        order = [leader["did"] for leader in self.get("/leaders")["leaders"]]
+        self.assertLess(
+            order.index(holder),
+            order.index(repainter),
+            "forty placements in one cell outranked five cells held",
+        )
+
+    def test_leaders_report_held_placed_and_witnessed_consistently(self) -> None:
+        body = self.get("/leaders")
+        leaders = body["leaders"]
+        self.assertGreater(len(leaders), 0)
+        self.assertLessEqual(len(leaders), 10)
+
+        held = [leader["held"] for leader in leaders]
+        self.assertEqual(held, sorted(held, reverse=True), "not ordered by cells held")
+
+        with Archive(self.path) as archive:
+            standing: dict[str, int] = {}
+            for row in archive.cells():
+                standing[row.did] = standing.get(row.did, 0) + 1
+            total_by_did: dict[str, int] = {}
+            for row in archive.since(0, limit=100000):
+                total_by_did[row.did] = total_by_did.get(row.did, 0) + 1
+
+        for leader in leaders:
+            with self.subTest(did=leader["did"][:20]):
+                self.assertEqual(leader["held"], standing[leader["did"]])
+                self.assertEqual(leader["placed"], total_by_did[leader["did"]])
+                # Held cells are a subset of placements, and witnessed a subset of held.
+                self.assertLessEqual(leader["held"], leader["placed"])
+                self.assertLessEqual(leader["witnessed"], leader["held"])
+
+    def test_leaders_hold_no_more_than_the_canvas_has(self) -> None:
+        """The held counts partition the occupied cells; they cannot exceed them."""
+        painted = self.get("/snapshot")["painted"]
+        held = sum(leader["held"] for leader in self.get("/leaders")["leaders"])
+        self.assertLessEqual(held, painted)
+
     def test_health_reports_lag(self) -> None:
         body = self.get("/health")
         self.assertEqual(body["room"], ROOM)

@@ -114,6 +114,19 @@ class Row:
 
 
 @dataclass(frozen=True)
+class Leader:
+    """One key's standing on the canvas."""
+
+    did: str
+    #: Cells whose newest placement is this key's — the ground it is still holding.
+    held: int
+    #: Every placement it ever made, including ones since painted over.
+    placed: int
+    #: How many of the held cells carry a signature that verified here.
+    witnessed: int
+
+
+@dataclass(frozen=True)
 class Stats:
     """What the archive holds, for the health endpoint and the watchdog."""
 
@@ -461,6 +474,42 @@ class Archive:
             "WHERE cx = ? AND cy = ? ORDER BY seq"
         )
         return [Row(**dict(row)) for row in self._db.execute(query, (cx, cy))]
+
+    def leaders(self, limit: int = 10) -> list[Leader]:
+        """The keys with the most pixels, by cells currently held.
+
+        Held, not placed. Total placements rewards repainting the same cell, which is the one
+        behaviour a shared canvas does not need encouraged — someone who overwrites their own
+        pixel four hundred times would top a placement board without ever holding more than
+        one cell. What a person recognises as "theirs" is the ground they are still holding,
+        so that is what is ranked; the placement count travels alongside it and is the more
+        flattering of the two, which is a reason to show both rather than pick the kinder one.
+
+        :raises ArchiveError: never; a canvas with no placements returns an empty list.
+        """
+        if limit <= 0:
+            raise ValueError("limit must be positive")
+        query = (
+            "WITH top AS ("
+            "  SELECT did, sig FROM placement"
+            "  WHERE seq IN (SELECT MAX(seq) FROM placement GROUP BY cy, cx)"
+            ") "
+            "SELECT top.did AS did, "
+            "       COUNT(*) AS held, "
+            "       COUNT(top.sig) AS witnessed, "
+            "       (SELECT COUNT(*) FROM placement p WHERE p.did = top.did) AS placed "
+            "FROM top GROUP BY top.did "
+            "ORDER BY held DESC, placed DESC, did ASC LIMIT ?"
+        )
+        return [
+            Leader(
+                did=row["did"],
+                held=row["held"],
+                placed=row["placed"],
+                witnessed=row["witnessed"],
+            )
+            for row in self._db.execute(query, (limit,))
+        ]
 
     def stats(self) -> Stats:
         counts = self._db.execute(

@@ -16,6 +16,7 @@ import { COLS, ROWS } from "./canvas/projection.ts";
 import { formatPlacement, parsePlacement } from "./canvas/wire.ts";
 import { ARCHIVE_URL, ROOM, hasArchive, relayUrl } from "./config.ts";
 import { follow as followPresence } from "./net/presence.ts";
+import { leaders } from "./net/leaders.ts";
 import { loadOrCreate } from "./identity/store.ts";
 import { IdentityPanel } from "./ui/identity-panel.ts";
 import { NonceCounter } from "./net/nonce.ts";
@@ -49,6 +50,8 @@ const provenance = need<HTMLElement>("#provenance");
 // next to: the presence follower starts during module setup, and a const declared below
 // its own use is a temporal dead zone waiting for the first callback to arrive early.
 const watching = need<HTMLElement>("#watching");
+const board = need<HTMLElement>("#holding");
+const boardList = need<HTMLElement>("#holding-list");
 const cellText = need<HTMLElement>("#r-cell");
 const stepText = need<HTMLElement>("#r-step");
 const contestText = need<HTMLElement>("#r-contest");
@@ -546,6 +549,8 @@ async function placePixel(cx: number, cy: number): Promise<void> {
       `placed${how} at seq ${outcome.seq}, signed by ${panel.current.did.slice(0, 12)}…`,
       "ok",
     );
+    // The one moment the ranking reliably changes for the person looking at it.
+    void refreshBoard();
     return;
   }
 
@@ -743,6 +748,8 @@ function startLoading(): void {
     },
   });
 
+  void refreshBoard();
+
   provenance.textContent = "loading the archive…";
   void loadCanvas(ARCHIVE_URL)
     .then(() => {
@@ -844,6 +851,45 @@ const timelapse = new Timelapse({
     scrubPlay.textContent = "▶";
   },
 });
+
+/* The board is refreshed on load and after this browser places a pixel, not on a timer.
+ *
+ * A ranking on a canvas this size moves in hours, and a poll would spend a request a minute
+ * per visitor to redraw the same five rows. The one moment it reliably changes for the person
+ * looking is when they themselves paint, so that is when it is asked again. */
+const BOARD_ROWS = 5;
+
+async function refreshBoard(): Promise<void> {
+  const rows = (await leaders(ARCHIVE_URL)).slice(0, BOARD_ROWS);
+  boardList.replaceChildren();
+  // Hidden rather than empty: a ranking with no rows reads as a ranking nobody is in.
+  board.hidden = rows.length === 0;
+  if (rows.length === 0) return;
+
+  const mine = panel.current?.did ?? "";
+  rows.forEach((leader, index) => {
+    const row = document.createElement("li");
+    row.className = leader.did === mine ? "holding__row holding__row--mine" : "holding__row";
+
+    const rank = document.createElement("span");
+    rank.className = "holding__rank";
+    rank.textContent = String(index + 1);
+
+    // textContent, never innerHTML: a did is a string a stranger chose, and design.md says
+    // rendering what strangers typed safely is this client's job.
+    const who = document.createElement("span");
+    who.className = "holding__did";
+    who.textContent = leader.did === mine ? "you" : `${leader.did.slice(8, 20)}…`;
+    who.title = `${leader.did} — ${leader.placed} placed, ${leader.witnessed} witnessed`;
+
+    const held = document.createElement("span");
+    held.className = "holding__held";
+    held.textContent = String(leader.held);
+
+    row.append(rank, who, held);
+    boardList.append(row);
+  });
+}
 
 /** Placing is refused while the replay is open — you would be painting onto the past. */
 function isReplaying(): boolean {
