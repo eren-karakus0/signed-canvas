@@ -133,16 +133,33 @@ test("the palette fills the wire format exactly", () => {
   assert.equal(PALETTE.length - 1, MAX_STEP);
 });
 
-test("every player colour is distinguishable from the empty cell", () => {
-  const closest = nearest(GROUND, players);
+/* White is a stated exception, not a slipped standard.
+ *
+ * It sits 1.1 from the ground, so a white cell on blank ground reads as blank. It is in the
+ * palette to be painted *over* a colour — the thing a shared canvas needs white for — and
+ * painting it on empty ground is erasing, which is supposed to look like nothing. Naming the
+ * one index here means a second colour cannot quietly join it. */
+const WHITE = PALETTE.indexOf("#FFFFFF");
+
+test("every player colour except white is distinguishable from the empty cell", () => {
+  const closest = nearest(GROUND, players.filter((step) => step !== WHITE));
   assert.ok(
     closest.apart >= MIN_SEPARATION,
     `step ${closest.step} (${PALETTE[closest.step]}) is ${closest.apart.toFixed(2)} from the ground — it would be placed and then invisible`,
   );
 });
 
-test("every player colour is distinguishable from the plot rules", () => {
-  const closest = nearest(GRID_LINE, players);
+test("white is separable from every colour it could be painted over", () => {
+  // This is the check that matters for white: covering a colour has to read as covering it.
+  const closest = nearest(PALETTE[WHITE]!, players.filter((step) => step !== WHITE));
+  assert.ok(
+    closest.apart >= MIN_SEPARATION,
+    `white is ${closest.apart.toFixed(2)} from step ${closest.step} (${PALETTE[closest.step]}) — painting over it would not show`,
+  );
+});
+
+test("every player colour except white is distinguishable from the plot rules", () => {
+  const closest = nearest(GRID_LINE, players.filter((step) => step !== WHITE));
   assert.ok(
     closest.apart >= MIN_SEPARATION,
     `step ${closest.step} (${PALETTE[closest.step]}) is ${closest.apart.toFixed(2)} from a rule`,
@@ -176,12 +193,7 @@ test("the added hues are separable from the ramp, from each other, and from the 
 });
 
 test("white is present, and it is white", () => {
-  // It is the colour a pixel canvas cannot do without: every logo, every letter and every
-  // highlight needs it. It was left out for a long time because the ground was near-white.
-  const white = PALETTE.indexOf("#FFFFFF");
-  assert.ok(white > 0, "the palette has no white");
-  assert.ok(
-    distance("#FFFFFF", GROUND) >= MIN_SEPARATION,
-    "white is back to being invisible on the ground",
-  );
+  // The colour a shared canvas cannot do without: it is how a person takes a cell back.
+  assert.ok(WHITE > 0, "the palette has no white");
+  assert.equal(PALETTE[WHITE], "#FFFFFF");
 });

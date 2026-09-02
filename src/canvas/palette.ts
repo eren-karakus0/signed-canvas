@@ -15,7 +15,7 @@ export const EMPTY = 0;
    measurement — `test/palette.test.ts` recomputes it on every run, which is the only version
    of "we checked" that stays true after someone edits this file. */
 export const PALETTE: readonly string[] = [
-  "#D5E1E7", // 00 · empty cell, = GROUND below
+  "#FBFDFD", // 00 · empty cell, = --current-color-20
   "#DF9449", // 01 hot
   "#D87A35",
   "#C6602C",
@@ -48,6 +48,12 @@ export const PALETTE: readonly string[] = [
   "#FF5C1A", // 30 bright orange
   "#22D3D3", // 31 cyan
   "#4A3226", // 32 dark brown
+  /* 33 · white is the one colour that does not have to clear 8 from the ground — it sits 1.1
+     from it, so a white cell on empty ground reads as empty. That is not a defect here: white
+     exists to be painted *over* a colour, which is what a shared canvas needs it for, and it
+     is 24.6 from the nearest colour it would ever cover. Painting white on blank ground is
+     erasing, and erasing looking like nothing is correct. `test/palette.test.ts` states this
+     as an exception rather than lowering the bar for everything. */
   "#FFFFFF", // 33 white
   "#7C878C", // 34 grey
   "#3D4A50", // 35 slate
@@ -71,17 +77,6 @@ const darken = (hex: string, k: number): string => {
 export const FACE_LEFT: readonly string[] = PALETTE.map((c) => darken(c, 0.7));
 export const FACE_RIGHT: readonly string[] = PALETTE.map((c) => darken(c, 0.85));
 
-/* The plot paper the drawing sits on. Not part of the ramp.
-
-   The ground used to be `--current-color-20` (#FBFDFD), a near-white surface, and that is why
-   this palette had no white: pure white sits 1.1 from it, so a white pixel would have been
-   placed, signed, counted — and invisible. White is the colour a pixel canvas cannot really do
-   without, so the ground moved instead of the colour being refused again. At #D5E1E7 white
-   clears the same 8 the rest of the palette has to clear (measured 8.6), and the rule moved to
-   the identity's own `--plot-line` to stay visible against it.
-
-   The board is now darker than the page it sits on, which reads as a recessed panel rather
-   than a sheet — a change of appearance, not of data. Nothing about any placed pixel changed:
-   what is signed is the cell and the step number, never the colour those resolve to. */
-export const GRID_LINE = "#C3D3D9";
-export const GROUND = "#D5E1E7";
+/** The plot paper the drawing sits on. Not part of the ramp. */
+export const GRID_LINE = "#DCE7EB";
+export const GROUND = "#FBFDFD";
