@@ -18,7 +18,7 @@ MAX_STEP = 35
 
 # Anchored at both ends, with single spaces: the server has already swept the text, so any
 # other spacing is a different string and was signed as one.
-PLACEMENT_PATTERN = re.compile(r"^px (\d{1,2}),(\d{1,2}) ([0-9a-f]) ([0-9a-z]{6})$")
+PLACEMENT_PATTERN = re.compile(r"^px (\d{1,2}),(\d{1,2}) ([0-9a-z]) ([0-9a-z]{6})$")
 
 SIGNED_SENDER_PREFIX = "did:key:"
 
@@ -42,7 +42,8 @@ def parse(text: str) -> Placement | None:
     if match is None:
         return None
     cx, cy = int(match.group(1)), int(match.group(2))
-    step = int(match.group(3), 16)
+    # Base36, not hex: hex is four bits and the palette outgrew it. 1-f are unchanged.
+    step = int(match.group(3), 36)
     if not (0 <= cx < N and 0 <= cy < N):
         return None
     if not (MIN_STEP <= step <= MAX_STEP):
