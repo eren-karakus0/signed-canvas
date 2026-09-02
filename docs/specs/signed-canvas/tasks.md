@@ -795,6 +795,46 @@ Position is announced through a visually-hidden live region, on the cell rather 
 pointer pixel: a mouse crossing the canvas would otherwise narrate a hundred cells nobody
 asked about.
 
+**T-22 · Flat, wider, and a feed beside it** — ✅ **DONE 2026-09-02**
+
+The projection was working against the product. A square grid at 2:1 is a rhombus, and the
+whole culture this canvas is modelled on is people drawing flags, logos and words together —
+none of which read on a rhombus. Flat by default (`canvas/flat.ts`); the axonometric renderer
+and the tower data both stay for a tilted history view, which is the only thing that shows a
+cell was fought over.
+
+A second file behind a `Surface` interface rather than a flag on the first: face on there is
+no occlusion, so no pick buffer, no diagonal repaint region and no Liang-Barsky. A flag would
+branch every method, and the branch for the view nobody is looking at is the branch that rots.
+
+**96 × 64.** Rightwards only — a placement is a signature over `px <x>,<y> …`, so a cell that
+moved would orphan a pixel rather than move one. 96 is the wire format's ceiling (`\d{1,2}`),
+and the height stayed because the room holds `px 58,54`.
+
+The snapshot states `cols`/`rows` and a mismatched build refuses rather than draws: the planes
+are indexed `cy * cols + cx`, so the wrong width scatters every pixel and looks like a broken
+renderer instead of the version skew it is.
+
+**The feed takes the space the canvas does not.** Seeded from the archive on load — those
+fields were decoded and thrown away, so the panel could only ever have shown what happened
+while the page was open — and each row jumps the view to its pixel.
+
+*The benchmark's invariant got stronger.* It asserted "this cell, or one drawn later", which
+is honest under occlusion and passes for a class of ordering bugs. Face on it asserts exactly
+this cell, and it now reads the geometry off the surface instead of restating TW/TH/LIFT —
+which is how its copy came to describe a projection the product had stopped using. **6144 of
+6144 exact, 0 occluded**, three engines.
+
+*Also fixed, reported from use:* "live updates paused" appeared on every tab switch and never
+cleared. A long poll that ends without an answer is ordinary — the service sheds 3–25% and a
+hidden tab has its fetches suspended — so the follower now waits out a hidden tab rather than
+counting it as a failure, speaks only after three consecutive ones, and the interface clears
+the warning on recovery. It only ever wrote it.
+
+*And an id that was a colour.* `#feed` is four hex digits, so the stylesheet auditor read it
+as a raw literal in the bundle. Renamed rather than excepted: an id shaped like a colour will
+trip every such check, not just this one.
+
 **T-21 · Where the interface answers** — ✅ **DONE 2026-09-02**
 *Done when:* `sagla.py` is clean and screenshots at 390 px wide are legible.
 *Depends on:* T-7.
