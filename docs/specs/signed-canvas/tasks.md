@@ -871,6 +871,98 @@ covered buttons hidden, 167 client + 92 Python + 162 crypto checks green, bundle
 *Depends on:* T-22.
 *Estimate given:* 4–6 h. *Actual:* about 5 h, most of it on the check that lied.
 
+**T-24 · White, and the ground that was moved for it** — ✅ **DONE 2026-09-03**
+
+White is the colour a shared canvas needs to take a cell back, and the palette did not have
+it. The first attempt solved the wrong problem: white sits 1.1 CIEDE2000 from the ground, so
+the ground was darkened to `#D5E1E7` to give it the same separation every other colour has to
+clear. Reverted after the ask was stated properly — white is wanted for painting **over** a
+colour, and it is 24.6 from the nearest colour it would ever cover. Painting white on blank
+ground is erasing, and erasing looking like nothing is correct.
+
+So the ground is `#FBFDFD` and white is one named exception in `test/palette.test.ts` rather
+than a lowered bar for everything; a second colour cannot quietly join it.
+
+**The wire format's step is one base36 character, so 35 is the ceiling and the palette was
+full.** Step 33 was chosen because the archive's 151 placements had never used it. What is
+signed is the cell and the step number, never the colour that number resolves to — changing a
+used step would have repainted other people's pixels retroactively.
+
+*The measurement became a test.* `palette.ts` carried the separation figures as a comment
+describing a script nobody kept. `test/palette.test.ts` recomputes them every run; both
+mutations (old ground, old pale) fail it.
+
+**T-25 · Drawing a picture onto the canvas** — ✅ **DONE 2026-09-03**
+
+The ten second wait between placements is the browser being polite, not the protocol. What
+the protocol enforces is 300 writes a minute per client IP, so an agent can paint a logo in a
+couple of minutes.
+
+Two tools, because they are two decisions. `scripts/pixelise.mjs` turns a picture into a plan
+of cells, choosing each colour by CIEDE2000, and writes a preview PNG **every time** rather
+than on request — a placement is permanent in the archive even after it is painted over, so
+render-and-look has to come before place. `agents/draw.py` places a plan: it compares against
+the archive first and writes only cells that differ, so an interrupted run resumes instead of
+repainting, and a cell already the right colour is skipped rather than contested against its
+own owner.
+
+*The Flop lockup is the real one.* Fetched from `flop.finance/assets/flop-lockup-reverse.svg`
+and measured rather than drawn from memory: it is a dot matrix on a 46.5-unit pitch, so it
+reproduces on a pixel canvas exactly. Re-tinted from ice white to the ramp's cold end for a
+light ground, which is a change of colour and not of shape. **351 placements at 59,42,
+overwriting nobody** — the emptiest 70×16 region was computed from the archive first.
+
+Signed through `technocore-keykit` with the registered identity, so the seed stays encrypted
+on disk and is decrypted for one signature at a time.
+
+**T-26 · Who is watching** — ✅ **DONE 2026-09-03**
+
+Held in the archive's memory, not in technocore.chat's presence notes. Measured against the
+live service: notes have no expiry, so one key per visitor accumulates forever in a shared
+public namespace capped at 131072; `GET /kv/<ns>` lists key names with no write time; and the
+value the convention standardises is "the seq you last saw", which stops telling a live viewer
+from an old one exactly when this canvas is quiet.
+
+It is the one number on the page that is not evidence, and it says so by showing nothing
+rather than a hopeful zero when it does not know. The id is invented per page load, not the
+visitor's did:key: a viewer count has no business learning which identity is reading.
+
+*Found in the route table it was added to:* `/cell` matched two digits while the canvas grew
+to 144 wide, so every column past 99 answered 404 — no proof export for a third of the board,
+which is the feature this project exists to demonstrate. The test that should have caught it
+accepted 400 **or** 404 for an out-of-bounds cell, so it passed on the 404 that came from the
+route never matching.
+
+**T-27 · Holding** — ✅ **DONE 2026-09-03**
+
+Ranked by cells still held, not placements made: repainting one cell four hundred times is
+four hundred placements and one pixel, and a board that put that on top would advertise the
+one habit a shared canvas does not need.
+
+*The first test claimed to check exactly that and did not.* The random fixture has no
+repainter, so both orderings produce the same list and the wrong sort passed. There is now a
+case built to disagree — forty placements in one cell against five cells held — and the wrong
+sort fails it.
+
+*Also measured rather than guessed:* `.board` was already the canvas container, so the new
+section inherited its flex rules. The feed was 0 px tall and the standings 413.
+
+**T-28 · The share card** — ✅ **DONE 2026-09-03**
+
+An image proves nothing, so the card does not pose as proof. It shows the canvas, states the
+counts, and carries the address where they can be checked against signatures that are not in
+the picture. "Witnessed" is a count beside a total rather than a badge — a badge invites the
+reading that the image is certified. The disclaimer travels with it: detached from the site,
+"every pixel is signed" beside a did:key reads like a token project.
+
+The clipboard is tried first and a file is the fallback, and the status line says which
+happened. Reporting "copied" after a download is how someone pastes an empty clipboard into a
+post.
+
+*Still to deploy:* `/presence/<id>` and `/leaders` are new archive routes. The site handles
+their absence by showing nothing, so production is correct but quiet until the archive on the
+tunnel host is updated.
+
 **T-21 · Where the interface answers** — ✅ **DONE 2026-09-02**
 *Done when:* `sagla.py` is clean and screenshots at 390 px wide are legible.
 *Depends on:* T-7.
