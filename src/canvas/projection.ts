@@ -9,10 +9,12 @@
  * coordinates it was signed with — a placement is a signature over `px <x>,<y> …`, so moving
  * a cell would not move a pixel, it would orphan one.
  *
- * 96 is not a free choice either. The wire format writes coordinates as `\d{1,2}`, so 99 is
- * the ceiling, and the room already holds `px 58,54` — dropping the height to fit a wider
- * ratio would have put a real pixel outside the canvas. */
-export const COLS = 96;
+ * Growing rightwards twice needed the wire format to widen with it: coordinates were
+ * `\d{1,2}`, so 99 was the ceiling. `\d{1,3}` lifts it without moving anything — every line
+ * ever written still parses to the same cell — and 144 is what fills the board at 64 rows
+ * on the screens people actually have. The height has never moved, because a shorter
+ * canvas would put real pixels outside it. */
+export const COLS = 144;
 export const ROWS = 64;
 export const CELLS = COLS * ROWS;
 export const TW = 22; // tile width

@@ -8,6 +8,7 @@
 
 import { Grid } from "./canvas/grid.ts";
 import { FlatScene } from "./canvas/flat.ts";
+import { Scene } from "./canvas/scene.ts";
 import { View } from "./canvas/view.ts";
 import { EMPTY, PALETTE, RAMP_END, STEPS } from "./canvas/palette.ts";
 import { COLS, ROWS } from "./canvas/projection.ts";
@@ -180,6 +181,10 @@ function showCell(cell: number | null): void {
 
 function repaint(cx: number, cy: number): void {
   scene.invalidateCell(cx, cy);
+  // The other projection is repainted too when it exists. It is not on screen, so this is
+  // invisible work — but skipping it means the side view shows the canvas as it was the last
+  // time anyone looked at it, which is worse than the cost.
+  tilted?.invalidateCell(cx, cy);
   view.request();
   showPainted();
 }
@@ -781,6 +786,21 @@ ramp.addEventListener("keydown", (event) => {
 });
 
 need<HTMLButtonElement>("#reset").addEventListener("click", () => view.fit());
+
+/* Side view: the same canvas, tilted, with a contested cell standing up as a column of the
+   colours it has been. Built on demand — the axonometric buffer is several times the size of
+   the flat one, and most visits never ask for it. */
+const tilt = need<HTMLButtonElement>("#tilt");
+let tilted: Scene | null = null;
+let showingTilt = false;
+tilt.addEventListener("click", () => {
+  showingTilt = !showingTilt;
+  if (showingTilt && tilted === null) tilted = new Scene(grid);
+  view.setSurface(showingTilt ? tilted! : scene);
+  tilt.setAttribute("aria-pressed", String(showingTilt));
+  tilt.textContent = showingTilt ? "flat view" : "side view";
+  say(showingTilt ? "side view — height is how often a cell has been overwritten" : "");
+});
 showPainted();
 startLoading();
 

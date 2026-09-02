@@ -55,6 +55,9 @@
     <p class="visually-hidden" id="canvas-help" aria-live="polite"></p>
     <div class="stage__corner" aria-hidden="true"></div>
     <button class="reset" id="reset" type="button">reset view</button>
+    <!-- Elevation is the only thing that shows a cell was fought over, and it cannot be
+         seen face on. Off by default, because face on is where art is legible. -->
+    <button class="reset reset--tilt" id="tilt" type="button" aria-pressed="false">side view</button>
 
     <!-- What is under the pointer, at the pointer. The footer row still carries the pinned
          record and the proof button — a panel that follows the cursor cannot hold something

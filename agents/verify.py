@@ -48,7 +48,7 @@ VERIFIED, UNSIGNED, FORGED, UNREADABLE = "VERIFIED", "UNSIGNED", "FORGED", "UNRE
 # step. Written as one pattern rather than as field tests because the tests are where a
 # nearly-matching line slips through — `str.isalnum`, for one, accepts uppercase and non-ASCII
 # digits that this format does not.
-_PLACEMENT = re.compile(r"^px (\d{1,2}),(\d{1,2}) ([0-9a-z]) ([0-9a-z]{6})$")
+_PLACEMENT = re.compile(r"^px (\d{1,3}),(\d{1,3}) ([0-9a-z]) ([0-9a-z]{6})$")
 
 
 def parse_placement(text: str) -> tuple[int, int, int] | None:

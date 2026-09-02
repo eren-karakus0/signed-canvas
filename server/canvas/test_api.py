@@ -253,7 +253,7 @@ class Api(unittest.TestCase):
     def test_unknown_routes_and_bad_cells_are_refused(self) -> None:
         # 96 wide, 64 tall: each axis gets its own case, and the far corner is checked
         # as valid below so a bound that is wrong in both directions cannot pass.
-        for path in ("/nope", "/since/abc", "/cell/96/0", "/cell/0/64"):
+        for path in ("/nope", "/since/abc", f"/cell/{COLS}/0", f"/cell/0/{ROWS}"):
             with self.subTest(path):
                 with self.assertRaises(urllib.error.HTTPError) as caught:
                     self.get(path)

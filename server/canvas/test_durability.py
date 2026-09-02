@@ -39,7 +39,7 @@ import unittest
 from pathlib import Path
 
 from archive import Archive, ArchiveError
-from placement import parse
+from placement import COLS, parse
 from verifier import message_payload
 
 HERE = Path(__file__).resolve().parent
@@ -106,7 +106,9 @@ class BatchSemantics(unittest.TestCase):
                         "seq": 2,
                         "ts": "t",
                         "from": DID_A,
-                        "text": "px 99,1 2 aaaaaa",
+                        # Off the canvas — read from the module, because this bound has
+                        # moved twice and a literal here silently stops testing it.
+                        "text": f"px {COLS},1 2 aaaaaa",
                         "nonce": 2,
                     },
                     {

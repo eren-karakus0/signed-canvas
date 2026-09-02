@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import unittest
 
-from placement import MAX_STEP, MIN_STEP, parse
+from placement import COLS, MAX_STEP, MIN_STEP, ROWS, parse
 
 BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"
 
@@ -74,9 +74,9 @@ class NotAPlacement(unittest.TestCase):
             # The canvas is 96 wide and 64 tall, so the two axes have different bounds
             # and each needs its own case — one shared number would have stopped testing
             # the width the moment it stopped matching the height.
-            "px 96,0 1 abcdef",
-            "px 0,64 1 abcdef",
-            "px 95,64 1 abcdef",
+            f"px {COLS},0 1 abcdef",
+            f"px 0,{ROWS} 1 abcdef",
+            f"px {COLS - 1},{ROWS} 1 abcdef",
             "px 12,47 3 K8F2A1",  # uppercase token
             "px 12,47 3 k8f2a",  # short token
             "px 12,47 3 k8f2a1x",  # long token
@@ -90,9 +90,9 @@ class NotAPlacement(unittest.TestCase):
     def test_the_far_corner_is_inside(self) -> None:
         # The counterpart to the refusals above: if both bounds were wrong in the same
         # direction, the refusal cases alone would still pass.
-        placement = parse("px 95,63 1 abcdef")
+        placement = parse(f"px {COLS - 1},{ROWS - 1} 1 abcdef")
         assert placement is not None
-        self.assertEqual((placement.cx, placement.cy), (95, 63))
+        self.assertEqual((placement.cx, placement.cy), (COLS - 1, ROWS - 1))
 
     def test_a_step_past_the_palette_is_refused_by_value_not_by_shape(self) -> None:
         # `z` is 35 and paintable; there is no single base36 digit above it, so the bound is

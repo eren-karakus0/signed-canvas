@@ -12,14 +12,14 @@ from __future__ import annotations
 import re
 from typing import NamedTuple
 
-COLS = 96
+COLS = 144
 ROWS = 64
 MIN_STEP = 1
 MAX_STEP = 35
 
 # Anchored at both ends, with single spaces: the server has already swept the text, so any
 # other spacing is a different string and was signed as one.
-PLACEMENT_PATTERN = re.compile(r"^px (\d{1,2}),(\d{1,2}) ([0-9a-z]) ([0-9a-z]{6})$")
+PLACEMENT_PATTERN = re.compile(r"^px (\d{1,3}),(\d{1,3}) ([0-9a-z]) ([0-9a-z]{6})$")
 
 SIGNED_SENDER_PREFIX = "did:key:"
 

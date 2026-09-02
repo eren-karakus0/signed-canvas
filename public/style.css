@@ -219,19 +219,26 @@ body {
 
 .board {
   position: relative;
-  flex: none;
+  /* Takes the width, rather than reserving its own ratio and floating in the middle of it.
+     The grid is 144x64 and the space left beside a content-width feed is close enough to
+     that ratio that fitting it leaves a sliver rather than the third of the screen a square
+     canvas used to leave. Cells stay square: stretching them to fill exactly would make a
+     pixel canvas whose pixels are not square. */
+  flex: 1;
+  min-width: 0;
   height: 100%;
-  aspect-ratio: 96 / 64;
-  max-width: 100%;
   background: var(--current-color-20);
   border: 1px solid var(--current-line);
   border-radius: var(--radius);
   overflow: hidden;
 }
 
+/* Sized to its own content, not to a share of the screen. A feed wide enough for
+   `49,25 z6MkkrPU26RG…` is a feed wide enough; everything past that was width taken from the
+   canvas to show nothing. */
 .side {
-  flex: 1;
-  min-width: 0;
+  flex: none;
+  width: 232px;
   display: flex;
   flex-direction: column;
   gap: var(--s-1);
@@ -307,6 +314,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .feed__ok {
@@ -390,6 +398,15 @@ body {
   height: 5px;
   border-left: 1px solid var(--current-color-40);
   border-top: 1px solid var(--current-color-40);
+}
+
+.reset--tilt {
+  left: calc(var(--s-2) + 132px);
+}
+
+.reset[aria-pressed="true"] {
+  color: var(--current-color-40);
+  border-color: var(--current-color-40);
 }
 
 .reset:hover,
@@ -882,6 +899,17 @@ body {
   /* The stage keeps filling the column. Constraining it to the content's 1.8:1 was tried
      and was worse: it moved the empty space out of the framed stage and onto the page,
      where it reads as a broken layout rather than as room to zoom into. */
+  /* Narrow screens: the feed goes under the canvas rather than beside it, where 232px is a
+     third of the width. */
+  .stage {
+    flex-direction: column;
+  }
+
+  .side {
+    width: auto;
+    max-height: 30vh;
+  }
+
   .foot {
     grid-template-columns: minmax(0, 1fr);
   }

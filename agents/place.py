@@ -28,7 +28,7 @@ import urllib.request
 
 BASE_URL = "https://technocore.chat"
 ROOM = "fplace"
-COLS = 96
+COLS = 144
 ROWS = 64
 MIN_STEP, MAX_STEP = 1, 35
 TIMEOUT_SECONDS = 30

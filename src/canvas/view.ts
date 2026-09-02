@@ -9,7 +9,6 @@
 import { COLS, PAD, ROWS } from "./projection.ts";
 import type { Surface } from "./surface.ts";
 
-const MIN_SCALE = 0.35;
 const MAX_SCALE = 3;
 /** Pointer travel, in CSS pixels, above which a press is a drag and not a click. */
 const DRAG_SLOP = 4;
@@ -44,7 +43,7 @@ export class View {
   private accentColour = "#0B8FA8";
 
   private readonly canvas: HTMLCanvasElement;
-  private readonly scene: Surface;
+  private scene: Surface;
   private readonly events: ViewEvents;
 
   constructor(canvas: HTMLCanvasElement, scene: Surface, events: ViewEvents) {
@@ -95,6 +94,10 @@ export class View {
       this.tx = r.width / 2 - bx * this.scale;
       this.ty = r.height / 2 - by * this.scale;
     }
+    // A frame that grew can leave the canvas short of an edge; a frame that shrank can leave
+    // it past one. Either way the floor scale moved with it.
+    if (this.scale < this.fitScale()) this.setScale(this.fitScale(), r.width / 2, r.height / 2, true);
+    this.clamp();
     this.boxW = r.width;
     this.boxH = r.height;
     this.request();
@@ -109,16 +112,40 @@ export class View {
     const bh = this.scene.bufferHeight;
     const s = Math.min(r.width / (bw - PAD), r.height / (bh - PAD));
     this.setScale(s, r.width / 2, r.height / 2, true);
-    this.tx = (r.width - bw * this.scale) / 2;
-    this.ty = (r.height - bh * this.scale) / 2;
+    this.clamp();
     this.boxW = r.width;
     this.boxH = r.height;
     this.userFramed = false;
     this.request();
   }
 
+  /**
+   * Swap the projection under the view.
+   *
+   * The two have different buffer sizes and different geometry, so everything positional is
+   * rebuilt rather than carried across: a scale that framed one is meaningless in the other.
+   */
+  setSurface(next: Surface): void {
+    this.scene = next;
+    this.hovered = null;
+    this.events.onHover(null, "pointer");
+    this.userFramed = false;
+    this.fit();
+  }
+
+  /** The scale at which the whole grid just fits the frame. Nothing zooms out past it. */
+  private fitScale(): number {
+    const r = this.canvas.getBoundingClientRect();
+    return Math.min(
+      r.width / (this.scene.bufferWidth - PAD),
+      r.height / (this.scene.bufferHeight - PAD),
+    );
+  }
+
   private setScale(next: number, anchorX: number, anchorY: number, silent = false): void {
-    const clamped = Math.min(MAX_SCALE, Math.max(MIN_SCALE, next));
+    // The floor is "the whole canvas is visible", not an arbitrary constant: zooming out past
+    // the board would put paper around a canvas that is supposed to fill its frame.
+    const clamped = Math.min(MAX_SCALE, Math.max(this.fitScale(), next));
     if (clamped === this.scale) return;
     // Keep the buffer point under the anchor fixed, so zoom follows the cursor.
     const bx = (anchorX - this.tx) / this.scale;
@@ -126,7 +153,23 @@ export class View {
     this.scale = clamped;
     this.tx = anchorX - bx * clamped;
     this.ty = anchorY - by * clamped;
+    this.clamp();
     if (!silent) this.request();
+  }
+
+  /**
+   * Keep the frame full.
+   *
+   * With no drag, zooming at the cursor is the only way to move, so the offset has to be
+   * bounded or a zoom near an edge would walk the canvas off the frame with no way back.
+   * Larger than the frame: pinned so no paper shows. Smaller: centred.
+   */
+  private clamp(): void {
+    const r = this.canvas.getBoundingClientRect();
+    const w = this.scene.bufferWidth * this.scale;
+    const h = this.scene.bufferHeight * this.scale;
+    this.tx = w >= r.width ? Math.min(0, Math.max(r.width - w, this.tx)) : (r.width - w) / 2;
+    this.ty = h >= r.height ? Math.min(0, Math.max(r.height - h, this.ty)) : (r.height - h) / 2;
   }
 
   screenToBuffer(clientX: number, clientY: number): { bx: number; by: number } {
@@ -152,14 +195,12 @@ export class View {
       if (this.pressed) {
         const dx = e.clientX - this.pressX;
         const dy = e.clientY - this.pressY;
+        // Still tracked, still cancels the click — a finger that slid off a cell did not
+        // mean to paint it. But it no longer moves the board: the canvas is a fixed surface
+        // that fills its frame, and a drag that slid it around left the grid somewhere
+        // nobody put it, with paper showing where the canvas used to be.
         if (!this.dragging && Math.hypot(dx, dy) > DRAG_SLOP) this.dragging = true;
-        if (this.dragging) {
-          this.userFramed = true;
-          this.tx += e.movementX;
-          this.ty += e.movementY;
-          this.request();
-          return;
-        }
+        if (this.dragging) return;
       }
       const { bx, by } = this.screenToBuffer(e.clientX, e.clientY);
       const cell = this.scene.pick(bx, by);
@@ -316,6 +357,7 @@ export class View {
     this.userFramed = true;
     this.tx = r.width / 2 - x * this.scale;
     this.ty = r.height / 2 - y * this.scale;
+    this.clamp();
     this.boxW = r.width;
     this.boxH = r.height;
     this.request();
@@ -339,9 +381,15 @@ export class View {
     return this.scale;
   }
 
-  /** Benchmark hook: drive pan and zoom without synthesising pointer events. */
+  /**
+   * Benchmark hook: drive pan and zoom without synthesising pointer events.
+   *
+   * Deliberately *not* clamped. The benchmark measures what it costs to paint the canvas
+   * under continuous movement, and clamping it to what a person can reach would measure a
+   * smaller sweep than the renderer has to survive.
+   */
   setViewport(scale: number, tx: number, ty: number): void {
-    this.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+    this.scale = Math.min(MAX_SCALE, Math.max(0.05, scale));
     this.tx = tx;
     this.ty = ty;
   }

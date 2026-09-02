@@ -20,7 +20,7 @@ import { COLS, ROWS } from "./projection.ts";
 
 /** Anchored, single spaces: the server has already swept the text, so any other spacing is a
  *  different string and was signed as one. */
-const PLACEMENT = /^px (\d{1,2}),(\d{1,2}) ([0-9a-z]) ([0-9a-z]{6})$/;
+const PLACEMENT = /^px (\d{1,3}),(\d{1,3}) ([0-9a-z]) ([0-9a-z]{6})$/;
 
 export const MIN_STEP = 1;
 export const MAX_STEP = 35;

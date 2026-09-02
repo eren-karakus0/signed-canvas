@@ -43,7 +43,7 @@ from typing import Iterable, Sequence
 # cell that moved would not move a pixel, it would orphan one. 96 is the ceiling the wire
 # format allows (`\d{1,2}`), and the height stayed at 64 because the room already holds
 # `px 58,54`.
-COLS = 96
+COLS = 144
 ROWS = 64
 CELLS = COLS * ROWS
 CELL_BYTES = CELLS

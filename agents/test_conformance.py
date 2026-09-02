@@ -23,6 +23,8 @@ import unittest
 from pathlib import Path
 
 from place import (
+    COLS,
+    ROWS,
     _sign,
     _public,
     _verify,
@@ -156,9 +158,10 @@ class PlacementGrammar(unittest.TestCase):
 
     def test_refuses_before_signing_rather_than_after(self) -> None:
         for x, y, step, token in [
-            # 96 wide, 64 tall — two different bounds, so two cases.
-            (96, 0, 1, "abcdef"),
-            (0, 64, 1, "abcdef"),
+            # Two different bounds, so two cases — and read from the module rather than
+            # written here, because the width has moved twice and a literal stops testing it.
+            (COLS, 0, 1, "abcdef"),
+            (0, ROWS, 1, "abcdef"),
             (-1, 0, 1, "abcdef"),
             (0, -1, 1, "abcdef"),
             (0, 0, 0, "abcdef"),
@@ -172,7 +175,10 @@ class PlacementGrammar(unittest.TestCase):
                     placement_text(x, y, step, token)
 
     def test_the_far_corner_is_inside(self) -> None:
-        self.assertEqual(placement_text(95, 63, 1, "abcdef"), "px 95,63 1 abcdef")
+        self.assertEqual(
+            placement_text(COLS - 1, ROWS - 1, 1, "abcdef"),
+            f"px {COLS - 1},{ROWS - 1} 1 abcdef",
+        )
 
     def test_a_placement_survives_the_sweep_unchanged(self) -> None:
         text = placement_text(12, 47, 3, "k8f2a1")
