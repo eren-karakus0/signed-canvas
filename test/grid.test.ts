@@ -3,8 +3,9 @@ import { describe, it } from "node:test";
 
 import { Grid } from "../src/canvas/grid.ts";
 import {
+  COLS,
   MAX_CONTEST,
-  N,
+  ROWS,
   bufferToFlatCell,
   cellIndex,
   cellTop,
@@ -50,12 +51,12 @@ describe("Grid.place", () => {
   it("accepts the first and last cell", () => {
     const grid = new Grid();
     assert.equal(grid.place(0, 0, 1), true);
-    assert.equal(grid.place(N - 1, N - 1, 15), true);
+    assert.equal(grid.place(COLS - 1, ROWS - 1, 15), true);
   });
 
   it("throws rather than silently ignoring a cell outside the canvas", () => {
     const grid = new Grid();
-    for (const [cx, cy] of [[-1, 0], [0, -1], [N, 0], [0, N]] as const) {
+    for (const [cx, cy] of [[-1, 0], [0, -1], [COLS, 0], [0, ROWS]] as const) {
       assert.throws(() => grid.place(cx, cy, 1), RangeError, `expected throw at ${cx},${cy}`);
     }
   });
@@ -72,7 +73,7 @@ describe("Grid.place", () => {
   it("returns null outside the canvas rather than a fabricated cell", () => {
     const grid = new Grid();
     assert.equal(grid.get(-1, 0), null);
-    assert.equal(grid.get(N, N), null);
+    assert.equal(grid.get(COLS, ROWS), null);
   });
 
   it("counts painted cells, not placements", () => {
@@ -90,8 +91,8 @@ describe("projection", () => {
   it("inverts to the same cell at the centre of every flat top face", () => {
     // The inverse is only used to bound a redraw region, but if it disagrees with the
     // forward projection the region can omit a cell and leave a stale tile on screen.
-    for (let cy = 0; cy < N; cy += 7) {
-      for (let cx = 0; cx < N; cx += 7) {
+    for (let cy = 0; cy < ROWS; cy += 7) {
+      for (let cx = 0; cx < COLS; cx += 7) {
         const top = cellTop(cx, cy, 0);
         const got = bufferToFlatCell(top.x, top.y + 11 / 2);
         assert.deepEqual(got, { cx, cy }, `round trip failed at ${cx},${cy}`);
@@ -107,8 +108,8 @@ describe("projection", () => {
 
   it("agrees with inBounds at the edges", () => {
     assert.equal(inBounds(0, 0), true);
-    assert.equal(inBounds(N - 1, N - 1), true);
-    assert.equal(inBounds(N, 0), false);
+    assert.equal(inBounds(COLS - 1, ROWS - 1), true);
+    assert.equal(inBounds(COLS, 0), false);
     assert.equal(inBounds(0, -1), false);
   });
 });
@@ -232,6 +233,6 @@ describe("Grid.restore", () => {
   });
 
   it("refuses a cell off the canvas", () => {
-    assert.throws(() => new Grid().restore(N, 0, 3, []), RangeError);
+    assert.throws(() => new Grid().restore(COLS, 0, 3, []), RangeError);
   });
 });

@@ -16,7 +16,7 @@
  * both are held to the examples below.
  */
 
-import { N } from "./projection.ts";
+import { COLS, ROWS } from "./projection.ts";
 
 /** Anchored, single spaces: the server has already swept the text, so any other spacing is a
  *  different string and was signed as one. */
@@ -44,7 +44,7 @@ export function parsePlacement(text: string): Placement | null {
   const cx = Number(match[1]);
   const cy = Number(match[2]);
   const step = parseInt(match[3]!, 36);
-  if (cx >= N || cy >= N) return null;
+  if (cx >= COLS || cy >= ROWS) return null;
   if (step < MIN_STEP || step > MAX_STEP) return null;
   return { cx, cy, step, token: match[4]! };
 }
@@ -56,7 +56,7 @@ export function parsePlacement(text: string): Placement | null {
  * caller has a bug, and signing a malformed line would publish it permanently.
  */
 export function formatPlacement(cx: number, cy: number, step: number, token: string): string {
-  if (!Number.isInteger(cx) || !Number.isInteger(cy) || cx < 0 || cy < 0 || cx >= N || cy >= N) {
+  if (!Number.isInteger(cx) || !Number.isInteger(cy) || cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) {
     throw new RangeError(`cell out of bounds: ${cx},${cy}`);
   }
   if (!Number.isInteger(step) || step < MIN_STEP || step > MAX_STEP) {

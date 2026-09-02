@@ -28,7 +28,8 @@ import urllib.request
 
 BASE_URL = "https://technocore.chat"
 ROOM = "fplace"
-GRID = 64
+COLS = 96
+ROWS = 64
 MIN_STEP, MAX_STEP = 1, 35
 TIMEOUT_SECONDS = 30
 READ_LIMIT = 200
@@ -169,8 +170,8 @@ def placement_text(x: int, y: int, step: int, token: str) -> str:
             signature over a malformed line is perfectly valid and permanently useless, so
             this refuses before signing rather than after.
     """
-    if not (0 <= x < GRID and 0 <= y < GRID):
-        raise ValueError(f"cell out of bounds: {x},{y} (the grid is {GRID}x{GRID})")
+    if not (0 <= x < COLS and 0 <= y < ROWS):
+        raise ValueError(f"cell out of bounds: {x},{y} (the grid is {COLS}x{ROWS})")
     if not (MIN_STEP <= step <= MAX_STEP):
         raise ValueError(f"step must be {MIN_STEP}..{MAX_STEP}, got {step}")
     if len(token) != 6 or any(
@@ -345,8 +346,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--x", type=int, required=True, help=f"column, 0..{GRID - 1}")
-    parser.add_argument("--y", type=int, required=True, help=f"row, 0..{GRID - 1}")
+    parser.add_argument("--x", type=int, required=True, help=f"column, 0..{COLS - 1}")
+    parser.add_argument("--y", type=int, required=True, help=f"row, 0..{ROWS - 1}")
     parser.add_argument(
         "--step",
         type=int,

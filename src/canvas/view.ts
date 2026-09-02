@@ -6,8 +6,8 @@
  * touching it is a canvas that drains a laptop for no reason.
  */
 
-import { BUF_H, BUF_W, MAX_CONTEST, N, PAD, TH, TW, cellTop } from "./projection.ts";
-import type { Scene } from "./scene.ts";
+import { COLS, PAD, ROWS } from "./projection.ts";
+import type { Surface } from "./surface.ts";
 
 const MIN_SCALE = 0.35;
 const MAX_SCALE = 3;
@@ -44,10 +44,10 @@ export class View {
   private accentColour = "#0B8FA8";
 
   private readonly canvas: HTMLCanvasElement;
-  private readonly scene: Scene;
+  private readonly scene: Surface;
   private readonly events: ViewEvents;
 
-  constructor(canvas: HTMLCanvasElement, scene: Scene, events: ViewEvents) {
+  constructor(canvas: HTMLCanvasElement, scene: Surface, events: ViewEvents) {
     this.canvas = canvas;
     this.scene = scene;
     this.events = events;
@@ -105,10 +105,12 @@ export class View {
     const r = this.canvas.getBoundingClientRect();
     // Fit to the drawn content, which is the buffer inset by PAD on every side — fitting to
     // the buffer itself wastes 40px of scale on padding that is never painted.
-    const s = Math.min(r.width / (BUF_W - PAD), r.height / (BUF_H - PAD));
+    const bw = this.scene.bufferWidth;
+    const bh = this.scene.bufferHeight;
+    const s = Math.min(r.width / (bw - PAD), r.height / (bh - PAD));
     this.setScale(s, r.width / 2, r.height / 2, true);
-    this.tx = (r.width - BUF_W * this.scale) / 2;
-    this.ty = (r.height - BUF_H * this.scale) / 2;
+    this.tx = (r.width - bw * this.scale) / 2;
+    this.ty = (r.height - bh * this.scale) / 2;
     this.boxW = r.width;
     this.boxH = r.height;
     this.userFramed = false;
@@ -234,7 +236,7 @@ export class View {
         return;
       } else if (e.key === "End") {
         e.preventDefault();
-        this.focusCellAt(N - 1, N - 1);
+        this.focusCellAt(COLS - 1, ROWS - 1);
         return;
       } else {
         return;
@@ -243,10 +245,10 @@ export class View {
       e.preventDefault();
       // Starting in the middle rather than at 0,0: a cursor that appears in a far corner of
       // an axonometric projection is a cursor nobody finds.
-      const from = this.hovered ?? Math.floor(N / 2) * N + Math.floor(N / 2);
+      const from = this.hovered ?? Math.floor(ROWS / 2) * COLS + Math.floor(COLS / 2);
       this.focusCellAt(
-        Math.min(N - 1, Math.max(0, (from % N) + dx)),
-        Math.min(N - 1, Math.max(0, Math.floor(from / N) + dy)),
+        Math.min(COLS - 1, Math.max(0, (from % COLS) + dx)),
+        Math.min(ROWS - 1, Math.max(0, Math.floor(from / COLS) + dy)),
       );
     });
 
@@ -276,45 +278,12 @@ export class View {
 
     const s = this.scale * this.dpr;
     g.setTransform(s, 0, 0, s, this.tx * this.dpr, this.ty * this.dpr);
-    g.drawImage(this.scene.bitmap, 0, 0, BUF_W, BUF_H);
+    g.drawImage(this.scene.bitmap, 0, 0, this.scene.bufferWidth, this.scene.bufferHeight);
 
-    if (this.hovered !== null) this.drawHoverMark(g);
-  }
-
-  private drawHoverMark(g: CanvasRenderingContext2D): void {
-    const cell = this.hovered!;
-    const cx = cell % N;
-    const cy = Math.floor(cell / N);
-    const contest = Math.min(this.scene.contestAt(cell), MAX_CONTEST);
-    const { x, y } = cellTop(cx, cy, contest);
-
-    // The shape signature: a crosshair, never a rounded highlight. The arms break either
-    // side of the tile rather than crossing it, so the mark reads as an instrument sight
-    // and never covers the colour the player is about to judge.
-    const arm = TW * 1.5;
-    const gapX = TW * 0.62;
-    const gapY = TH * 1.25;
-    const midY = y + TH / 2;
-    g.lineWidth = Math.max(1, 1.5 / this.scale);
-    g.strokeStyle = this.accentColour;
-    g.beginPath();
-    g.moveTo(x - gapX - arm, midY);
-    g.lineTo(x - gapX, midY);
-    g.moveTo(x + gapX, midY);
-    g.lineTo(x + gapX + arm, midY);
-    g.moveTo(x, midY - gapY - arm / 2);
-    g.lineTo(x, midY - gapY);
-    g.moveTo(x, midY + gapY);
-    g.lineTo(x, midY + gapY + arm / 2);
-    g.stroke();
-
-    g.beginPath();
-    g.moveTo(x, y);
-    g.lineTo(x + TW / 2, y + TH / 2);
-    g.lineTo(x, y + TH);
-    g.lineTo(x - TW / 2, y + TH / 2);
-    g.closePath();
-    g.stroke();
+    // The mark's geometry belongs to the projection: a rhombus in one, a square in the other.
+    if (this.hovered !== null) {
+      this.scene.drawMark(g, this.hovered, this.accentColour, this.scale);
+    }
   }
 
   /** The cell under the pointer, or null. Read after an async lookup to check the pointer
@@ -327,18 +296,34 @@ export class View {
    * keep in agreement for no gain.
    */
   private focusCellAt(cx: number, cy: number): void {
-    const cell = cy * N + cx;
+    const cell = cy * COLS + cx;
     if (cell === this.hovered) return;
     this.hovered = cell;
     this.events.onHover(cell, "keyboard");
     this.request();
   }
 
-  /** Where a cell's top face is on screen, in client coordinates. */
+  /**
+   * Bring a cell to the middle of the view, without changing the zoom.
+   *
+   * Used by the feed: a line that says where a pixel landed and cannot take you there is a
+   * line of trivia. The scale is left alone on purpose — jumping *and* zooming loses the
+   * reader's place twice.
+   */
+  centreOn(cell: number): void {
+    const r = this.canvas.getBoundingClientRect();
+    const { x, y } = this.scene.cellOrigin(cell);
+    this.userFramed = true;
+    this.tx = r.width / 2 - x * this.scale;
+    this.ty = r.height / 2 - y * this.scale;
+    this.boxW = r.width;
+    this.boxH = r.height;
+    this.request();
+  }
+
+  /** Where a cell sits on screen, in client coordinates. */
   cellToClient(cell: number): { x: number; y: number } {
-    const cx = cell % N;
-    const cy = Math.floor(cell / N);
-    const { x: bx, y: by } = cellTop(cx, cy, this.scene.contestAt(cell));
+    const { x: bx, y: by } = this.scene.cellOrigin(cell);
     const r = this.canvas.getBoundingClientRect();
     return {
       x: r.left + this.tx + bx * this.scale,

@@ -20,7 +20,16 @@ from pathlib import Path
 
 from app import serve
 from archive import Archive
-from snapshot import CELL_BYTES, WITNESS_BYTES, apply_delta, decode, pack, unpack
+from snapshot import (
+    CELL_BYTES,
+    COLS,
+    ROWS,
+    WITNESS_BYTES,
+    apply_delta,
+    decode,
+    pack,
+    unpack,
+)
 
 DID_A = "did:key:z6Mkon3Necd6NkkyfoGoHxid2znGc59LU3K7mubaRcFbLfLX"
 DID_B = "did:key:z6MkeXCT2bbYPVr8zoLJxVTfcdZPeBGnx8Fw23Mrk88FqGKa"
@@ -49,8 +58,8 @@ def _random_history(count: int, seed: int = 11, start: int = 1) -> list[dict]:
     return [
         _message(
             seq,
-            rand.randrange(64),
-            rand.randrange(64),
+            rand.randrange(COLS),
+            rand.randrange(ROWS),
             rand.randrange(1, 16),
             DID_A if seq % 3 else DID_B,
         )
@@ -242,7 +251,9 @@ class Api(unittest.TestCase):
         self.assertEqual(body["placements"], 120)
 
     def test_unknown_routes_and_bad_cells_are_refused(self) -> None:
-        for path in ("/nope", "/since/abc", "/cell/64/0", "/cell/0/99"):
+        # 96 wide, 64 tall: each axis gets its own case, and the far corner is checked
+        # as valid below so a bound that is wrong in both directions cannot pass.
+        for path in ("/nope", "/since/abc", "/cell/96/0", "/cell/0/64"):
             with self.subTest(path):
                 with self.assertRaises(urllib.error.HTTPError) as caught:
                     self.get(path)

@@ -27,7 +27,8 @@ import re
 import sys
 
 from place import (
-    GRID,
+    COLS,
+    ROWS,
     MAX_STEP,
     MIN_STEP,
     ROOM,
@@ -61,7 +62,7 @@ def parse_placement(text: str) -> tuple[int, int, int] | None:
     if match is None:
         return None
     x, y, step = int(match[1]), int(match[2]), int(match[3], 36)
-    if not (0 <= x < GRID and 0 <= y < GRID and MIN_STEP <= step <= MAX_STEP):
+    if not (0 <= x < COLS and 0 <= y < ROWS and MIN_STEP <= step <= MAX_STEP):
         return None
     return x, y, step
 
@@ -125,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
         f"(written before the service published signatures) · "
         f"{tally[FORGED]} bad · {tally[UNREADABLE]} unreadable"
     )
-    print(f"{len(canvas)} of {GRID * GRID} cells painted")
+    print(f"{len(canvas)} of {COLS * ROWS} cells painted")
 
     if tally[FORGED]:
         print(

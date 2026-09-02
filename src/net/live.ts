@@ -28,6 +28,16 @@ import { since as archiveSince } from "./archive.ts";
 const WAIT_SECONDS = 10;
 /** Consecutive room failures before falling back to the archive for a round. */
 const FAILURES_BEFORE_FALLBACK = 2;
+/**
+ * Consecutive failures before the interface is told.
+ *
+ * A long poll that ends without an answer is ordinary: the service sheds 3-25% of requests,
+ * and a backgrounded tab has its fetches suspended, so *every* return from another tab used
+ * to produce "live updates paused — timed out". Saying it on the first failure made the
+ * message mean nothing, which is worse than not saying it: a warning that is usually wrong
+ * is a warning people learn to ignore.
+ */
+const FAILURES_BEFORE_SAYING = 3;
 const BACKOFF_MS = [1_000, 3_000, 8_000, 20_000];
 
 export interface LivePlacement {
@@ -78,6 +88,8 @@ export function follow(
   let seq = fromSeq;
   let stopped = false;
   let failures = 0;
+  /** Whether the interface has been told we are degraded, so recovery can clear it. */
+  let announced = false;
 
   const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
@@ -142,9 +154,9 @@ export function follow(
     for (const cell of delta.placements) {
       if (stopped) return;
       events.onPlacement({
-        seq: delta.seq,
-        ts: "",
-        did: "",
+        seq: cell.seq,
+        ts: cell.ts,
+        did: cell.did,
         cx: cell.cx,
         cy: cell.cy,
         step: cell.step,
@@ -160,14 +172,33 @@ export function follow(
   void (async () => {
     for (;;) {
       if (stopped) return;
+      // A hidden tab has no frames and suspended fetches. Waiting for it to come back is
+      // not a failure, and counting it as one is how a normal tab switch became a warning.
+      if (document.hidden) {
+        await new Promise<void>((resolve) => {
+          const wake = (): void => {
+            if (document.hidden) return;
+            document.removeEventListener("visibilitychange", wake);
+            resolve();
+          };
+          document.addEventListener("visibilitychange", wake);
+        });
+      }
+
       try {
         await roundFromRoom();
-        if (failures > 0) events.onStatus(true, "live again");
+        if (announced) {
+          events.onStatus(true, "live again");
+          announced = false;
+        }
         failures = 0;
       } catch (roomError) {
         failures += 1;
         const reason = roomError instanceof Error ? roomError.message : "unreachable";
-        events.onStatus(false, reason);
+        if (failures >= FAILURES_BEFORE_SAYING && !announced) {
+          events.onStatus(false, reason);
+          announced = true;
+        }
 
         if (failures >= FAILURES_BEFORE_FALLBACK) {
           try {

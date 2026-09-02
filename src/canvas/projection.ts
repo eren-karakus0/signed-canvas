@@ -2,7 +2,19 @@
    camera: PLOT is a technical drawing and a technical drawing does not have a vanishing
    point. Every function here works in *buffer* pixels at scale 1; the view applies zoom. */
 
-export const N = 64; // canvas is N x N cells (NFR-7)
+/* The canvas is wider than it is tall, because the screen is.
+ *
+ * It was 64x64, which left a square of pixels in the middle of a wide stage and empty ground
+ * either side of it. Growing it *rightwards only* means every pixel already placed keeps the
+ * coordinates it was signed with — a placement is a signature over `px <x>,<y> …`, so moving
+ * a cell would not move a pixel, it would orphan one.
+ *
+ * 96 is not a free choice either. The wire format writes coordinates as `\d{1,2}`, so 99 is
+ * the ceiling, and the room already holds `px 58,54` — dropping the height to fit a wider
+ * ratio would have put a real pixel outside the canvas. */
+export const COLS = 96;
+export const ROWS = 64;
+export const CELLS = COLS * ROWS;
 export const TW = 22; // tile width
 export const TH = 11; // tile height — exactly TW/2, which is what makes it 2:1
 export const LIFT = 7; // rise in pixels per contest
@@ -15,11 +27,11 @@ export const PAD = 20;
 export const HEADROOM = MAX_CONTEST * LIFT + PAD;
 
 /** Buffer dimensions at scale 1. */
-export const BUF_W = N * TW + PAD * 2;
-export const BUF_H = N * TH + HEADROOM + PAD;
+export const BUF_W = (COLS + ROWS) * (TW / 2) + PAD * 2;
+export const BUF_H = (COLS + ROWS) * (TH / 2) + HEADROOM + PAD;
 
 /** Origin of cell (0,0)'s top vertex, in buffer pixels. */
-export const OX = BUF_W / 2;
+export const OX = ROWS * (TW / 2) + PAD;
 export const OY = HEADROOM;
 
 export interface Point {
@@ -48,6 +60,6 @@ export function bufferToFlatCell(bx: number, by: number): { cx: number; cy: numb
 }
 
 export const inBounds = (cx: number, cy: number): boolean =>
-  cx >= 0 && cy >= 0 && cx < N && cy < N;
+  cx >= 0 && cy >= 0 && cx < COLS && cy < ROWS;
 
-export const cellIndex = (cx: number, cy: number): number => cy * N + cx;
+export const cellIndex = (cx: number, cy: number): number => cy * COLS + cx;

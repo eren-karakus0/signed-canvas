@@ -1,7 +1,7 @@
 /* The cell state the renderer draws. Nothing here knows about signatures or the network:
    the archiver and the room feed it, and it only ever holds what has already been verified. */
 
-import { MAX_CONTEST, N, cellIndex, inBounds } from "./projection.ts";
+import { CELLS, COLS, MAX_CONTEST, cellIndex, inBounds } from "./projection.ts";
 import { MAX_STEP } from "./wire.ts";
 import { EMPTY } from "./palette.ts";
 
@@ -14,9 +14,9 @@ export interface Cell {
 
 export class Grid {
   /** Palette index per cell, 0 = empty. This is the *top* of the tower. */
-  readonly step = new Uint8Array(N * N);
+  readonly step = new Uint8Array(CELLS);
   /** How many times the cell has been overwritten. Drives elevation. */
-  readonly contest = new Uint8Array(N * N);
+  readonly contest = new Uint8Array(CELLS);
   /**
    * The colours *under* the top, `MAX_CONTEST` slots per cell, bottom first. 0 = no level.
    *
@@ -29,7 +29,7 @@ export class Grid {
    * viewport, so a cell contested more often keeps its most recent levels. The server packs
    * the same window, and `snapshot.py` carries the matching constant.
    */
-  readonly layers = new Uint8Array(N * N * MAX_CONTEST);
+  readonly layers = new Uint8Array(CELLS * MAX_CONTEST);
 
   get(cx: number, cy: number): Cell | null {
     if (!inBounds(cx, cy)) return null;

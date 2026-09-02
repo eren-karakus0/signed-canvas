@@ -162,38 +162,34 @@ const measure = async (page, droppedAboveMs) =>
 
 const pickInvariant = async (page) =>
   page.evaluate(() => {
-    // The top-face centre of a cell must resolve to that cell, or to one drawn later —
-    // only a later cell can be in front of it. Anything earlier means the draw order or
-    // the projection is wrong.
-    const { scene } = window.__canvas;
-    const N = 64;
-    const TW = 22;
-    const TH = 11;
-    const LIFT = 7;
-    const MAX_CONTEST = 8;
-    const PAD = 20;
-    const BUF_W = N * TW + PAD * 2;
-    const OX = BUF_W / 2;
-    const OY = MAX_CONTEST * LIFT + PAD;
+    /* Every cell's centre must resolve to that cell. Exactly, with nothing occluded.
+     *
+     * This assertion got *stronger* when the canvas moved to a flat projection. In the
+     * axonometric one a raised tile hides the tiles behind it, so the honest invariant was
+     * "this cell, or one drawn later" — which passes for a whole class of ordering bugs.
+     * Face on, nothing covers anything, so anything but an exact answer is wrong.
+     *
+     * Geometry read from the surface rather than restated here: this file had TW, TH, LIFT
+     * and PAD copied into it, and the copies kept describing a projection the product had
+     * stopped using. */
+    const { scene, grid } = window.__canvas;
+    const COLS = window.__canvas.cols;
+    const ROWS = window.__canvas.rows;
 
     let exact = 0;
-    let occluded = 0;
     const wrong = [];
-    for (let cy = 0; cy < N; cy++) {
-      for (let cx = 0; cx < N; cx++) {
-        const own = cy * N + cx;
-        const lift = Math.min(scene.contestAt(own), MAX_CONTEST) * LIFT;
-        const x = OX + (cx - cy) * (TW / 2);
-        const y = OY + (cx + cy) * (TH / 2) - lift + TH / 2;
-        const got = scene.pick(x, y);
+    for (let cy = 0; cy < ROWS; cy++) {
+      for (let cx = 0; cx < COLS; cx++) {
+        const own = cy * COLS + cx;
+        const { x, y } = scene.cellOrigin(own);
+        const got = scene.pick(x + 1, y + 1);
         if (got === own) exact++;
-        else if (got !== null && got > own) occluded++;
         else if (wrong.length < 8) wrong.push({ cx, cy, own, got });
       }
     }
-    // A point well outside the diamond is paper, not a cell.
-    const offCanvas = scene.pick(4, 4);
-    return { exact, occluded, wrong, total: N * N, offCanvas };
+    // A point off the grid is paper, not a cell.
+    const offCanvas = scene.pick(-50, -50);
+    return { exact, occluded: 0, wrong, total: COLS * ROWS, offCanvas };
   });
 
 const HEADED = process.argv.includes("--headed");

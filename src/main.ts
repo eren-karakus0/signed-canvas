@@ -7,17 +7,17 @@
  * pixel is a small lie about exactly the thing this product sells. */
 
 import { Grid } from "./canvas/grid.ts";
-import { Scene } from "./canvas/scene.ts";
+import { FlatScene } from "./canvas/flat.ts";
 import { View } from "./canvas/view.ts";
 import { EMPTY, PALETTE, RAMP_END, STEPS } from "./canvas/palette.ts";
-import { N } from "./canvas/projection.ts";
+import { COLS, ROWS } from "./canvas/projection.ts";
 import { formatPlacement, parsePlacement } from "./canvas/wire.ts";
 import { ARCHIVE_URL, ROOM, hasArchive, relayUrl } from "./config.ts";
 import { loadOrCreate } from "./identity/store.ts";
 import { IdentityPanel } from "./ui/identity-panel.ts";
 import { NonceCounter } from "./net/nonce.ts";
 import { lastNonce, place, token } from "./net/room.ts";
-import { snapshot } from "./net/archive.ts";
+import { since, snapshot } from "./net/archive.ts";
 import { type LivePlacement, follow } from "./net/live.ts";
 import { type Placement, cellHistory, describeOwner, exportProof } from "./net/proof.ts";
 import { copyText } from "./ui/clipboard.ts";
@@ -31,9 +31,15 @@ const need = <T extends Element>(selector: string): T => {
 const pad2 = (n: number): string => String(n).padStart(2, "0");
 
 const grid = new Grid();
-const scene = new Scene(grid);
+/* Straight on by default. The axonometric renderer in `canvas/scene.ts` still exists and the
+   tower data still feeds it — elevation is the only thing that shows a cell was fought over —
+   but a rhombus is the wrong grid to draw a flag on, and drawing things together is what this
+   canvas is for. */
+const scene = new FlatScene(grid);
 const canvas = need<HTMLCanvasElement>("#canvas");
-const stage = need<HTMLElement>(".stage");
+// The floating panels are absolutely positioned inside the board, so the board is what
+// their coordinates are relative to — not the stage, which now also holds the feed.
+const stage = need<HTMLElement>(".board");
 const statusLine = need<HTMLElement>("#status");
 const provenance = need<HTMLElement>("#provenance");
 const cellText = need<HTMLElement>("#r-cell");
@@ -45,6 +51,11 @@ const basisText = need<HTMLElement>("#r-basis");
 const proofButton = need<HTMLButtonElement>("#proof");
 const proofHint = need<HTMLElement>("#proof-hint");
 const latestLine = need<HTMLElement>("#latest");
+// `#live-feed`, not `#feed`: the latter is four hex digits, so every stylesheet
+// auditor reads it as a raw colour literal in the bundle. An id that looks like a
+// colour will keep tripping every such check, so it is not one.
+const feed = need<HTMLElement>("#live-feed");
+const feedEmpty = need<HTMLElement>("#live-empty");
 
 let selectedStep = 1;
 let roomHead = 0;
@@ -150,7 +161,7 @@ function say(message: string, tone: "info" | "ok" | "warn" = "info"): void {
 }
 
 function showPainted(): void {
-  paintedText.textContent = `${grid.painted()} / ${N * N}`;
+  paintedText.textContent = `${grid.painted()} / ${COLS * ROWS}`;
 }
 
 function showCell(cell: number | null): void {
@@ -160,7 +171,7 @@ function showCell(cell: number | null): void {
     contestText.textContent = "—";
     return;
   }
-  const state = grid.get(cell % N, Math.floor(cell / N));
+  const state = grid.get(cell % COLS, Math.floor(cell / COLS));
   if (!state) return;
   cellText.textContent = `${pad2(state.cx)}, ${pad2(state.cy)}`;
   stepText.textContent = state.step === EMPTY ? "empty" : pad2(state.step);
@@ -235,7 +246,7 @@ function showTip(cell: number | null): void {
     tip.hidden = true;
     return;
   }
-  const state = grid.get(cell % N, Math.floor(cell / N));
+  const state = grid.get(cell % COLS, Math.floor(cell / COLS));
   if (!state) return;
   tip.hidden = false;
   tipCell.textContent = `${pad2(state.cx)}, ${pad2(state.cy)}`;
@@ -275,8 +286,8 @@ function announceCursor(cell: number | null): void {
     canvasHelp.textContent = "";
     return;
   }
-  const cx = cell % N;
-  const cy = Math.floor(cell / N);
+  const cx = cell % COLS;
+  const cy = Math.floor(cell / COLS);
   const step = grid.step[cell] ?? EMPTY;
   canvasHelp.textContent =
     step === EMPTY
@@ -329,7 +340,7 @@ function showOwner(cell: number, top: Placement | null): void {
   // Name the cell the export is for. The inspection is pinned rather than following the
   // pointer, so without this the button would be about an unstated cell.
   proofHint.textContent =
-    `for ${pad2(cell % N)},${pad2(Math.floor(cell / N))} · ` +
+    `for ${pad2(cell % COLS)},${pad2(Math.floor(cell / COLS))} · ` +
     (top.witnessed
       ? "signature held, the export can be checked by anyone"
       : "no signature held, and the export says so rather than pretending");
@@ -360,8 +371,8 @@ function inspectCell(cell: number | null): void {
       clearOwner("no archive configured — ownership cannot be shown");
       return;
     }
-    const cx = cell % N;
-    const cy = Math.floor(cell / N);
+    const cx = cell % COLS;
+    const cy = Math.floor(cell / COLS);
     void cellHistory(ARCHIVE_URL, cx, cy)
       .then((record) => {
         const top = record.placements.at(-1) ?? null;
@@ -382,7 +393,7 @@ function inspectCell(cell: number | null): void {
 proofButton.addEventListener("click", () => {
   if (inspecting === null) return;
   const { cell, top } = inspecting;
-  const text = exportProof(cell % N, Math.floor(cell / N), top);
+  const text = exportProof(cell % COLS, Math.floor(cell / COLS), top);
   const what = top.witnessed
     ? "proof — it verifies without this site"
     : "record — this pixel is attested, so there is no signature to check";
@@ -414,7 +425,7 @@ const view = new View(canvas, scene, {
     }
   },
   onActivate(cell) {
-    void placePixel(cell % N, Math.floor(cell / N));
+    void placePixel(cell % COLS, Math.floor(cell / COLS));
   },
 });
 
@@ -441,7 +452,7 @@ async function placePixel(cx: number, cy: number): Promise<void> {
   }
 
   const relay = relayUrl();
-  const index = cy * N + cx;
+  const index = cy * COLS + cx;
   if (inFlight.has(index)) return;
 
   // Build the line before painting anything. If the format refuses it, nothing has been
@@ -560,6 +571,29 @@ async function loadCanvas(base: string): Promise<void> {
   view.fit();
   showPainted();
 
+  /* Seed the feed from what already happened. An empty panel on a fresh load is the same
+     "nothing is here" the layout was rearranged to avoid, and the archive holds the answer —
+     the feed used to start empty only because the client discarded the fields it needed. */
+  void since(base, Math.max(0, state.seq - FEED_MAX))
+    .then((delta) => {
+      for (const record of delta.placements) {
+        addToFeed({
+          seq: record.seq,
+          ts: record.ts,
+          did: record.did,
+          cx: record.cx,
+          cy: record.cy,
+          step: record.step,
+          // From the archive, which states its own verdict rather than handing over the
+          // bytes. The tick means "checked in this browser", so these do not get one.
+          verified: false,
+        });
+      }
+    })
+    .catch(() => {
+      // A feed that failed to seed is a quiet loss, not a broken canvas.
+    });
+
   const stale = state.lag > 0 ? ` · ${state.lag} behind the room` : "";
   const proven =
     state.witnessed === 0
@@ -583,13 +617,66 @@ function applyIncoming(placement: LivePlacement): void {
     repaint(cx, cy);
     // A cell whose owner was cached now has a different one. Dropping the entry is cheaper
     // than refetching it, and the next hover asks again.
-    owners.delete(cy * N + cx);
-    if (view.hoveredCell === cy * N + cx) {
-      showCell(cy * N + cx);
-      inspectCell(cy * N + cx);
+    owners.delete(cy * COLS + cx);
+    if (view.hoveredCell === cy * COLS + cx) {
+      showCell(cy * COLS + cx);
+      inspectCell(cy * COLS + cx);
     }
   }
   showLatest(placement);
+  addToFeed(placement);
+}
+
+/* The feed: what is happening, as it happens.
+ *
+ * r/place was not compelling because of the picture — it was compelling because you could
+ * watch it being fought over. We already receive every placement live and verify it here;
+ * until now none of that reached the screen except as one line in the header.
+ *
+ * Bounded, because it runs forever. Old entries are removed rather than left to grow a list
+ * nobody scrolls to the bottom of on a page that may be open for hours. */
+const FEED_MAX = 40;
+
+function addToFeed(placement: LivePlacement): void {
+  feedEmpty.hidden = true;
+  const row = document.createElement("li");
+  row.tabIndex = 0;
+  row.title = placement.did === "" ? "" : placement.did;
+
+  const chip = document.createElement("span");
+  chip.className = "feed__chip";
+  chip.style.background = PALETTE[placement.step] ?? "";
+  const at = document.createElement("span");
+  at.className = "feed__at";
+  at.textContent = `${pad2(placement.cx)},${pad2(placement.cy)}`;
+  const who = document.createElement("span");
+  who.className = "feed__who";
+  who.textContent =
+    placement.did === "" ? "via the archive" : `${placement.did.slice(8, 20)}…`;
+  row.append(chip, at, who);
+
+  if (placement.verified) {
+    const ok = document.createElement("span");
+    ok.className = "feed__ok";
+    // The tick is the claim, so it is only drawn when this browser did the checking.
+    ok.textContent = "✓";
+    ok.title = "signature verified in this browser";
+    row.append(ok);
+  }
+
+  const jump = (): void => {
+    view.centreOn(placement.cy * COLS + placement.cx);
+  };
+  row.addEventListener("click", jump);
+  row.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      jump();
+    }
+  });
+
+  feed.prepend(row);
+  while (feed.childElementCount > FEED_MAX) feed.lastElementChild?.remove();
 }
 
 /** Who painted the last pixel, and whether this browser checked the signature itself. */
@@ -636,7 +723,10 @@ function startLoading(): void {
           roomHead = Math.max(roomHead, seq);
         },
         onStatus: (live, detail) => {
-          if (!live) say(`live updates paused — ${detail}`, "warn");
+          // Clearing on recovery matters as much as saying it: the old version only ever
+          // wrote the warning, so a single blip left "live updates paused" on screen for the
+          // rest of the session while updates were in fact arriving.
+          say(live ? "" : `live updates paused — ${detail}`, live ? "info" : "warn");
         },
       });
     })
@@ -700,5 +790,13 @@ startLoading();
    rather than shipping a debug surface on `window`. */
 declare const __BENCH__: boolean;
 if (__BENCH__) {
-  (globalThis as unknown as { __canvas: unknown }).__canvas = { view, scene, grid };
+  // `cols`/`rows` travel with it: the benchmark used to restate the geometry and its copy
+  // kept describing a projection the product had stopped using.
+  (globalThis as unknown as { __canvas: unknown }).__canvas = {
+    view,
+    scene,
+    grid,
+    cols: COLS,
+    rows: ROWS,
+  };
 }

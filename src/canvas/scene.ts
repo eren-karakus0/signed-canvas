@@ -15,18 +15,21 @@ import {
   BUF_H,
   BUF_W,
   LIFT,
+  CELLS,
+  COLS,
   MAX_CONTEST,
-  N,
   OX,
   OY,
   PAD,
   TH,
+  ROWS,
   TW,
   cellIndex,
   cellTop,
 } from "./projection.ts";
 import { EMPTY, FACE_LEFT, FACE_RIGHT, GRID_LINE, GROUND, PALETTE } from "./palette.ts";
 import type { Grid } from "./grid.ts";
+import type { Rect as SurfaceRect, Surface } from "./surface.ts";
 
 /** Scene bitmap resolution multiplier. Keeps 0-radius edges crisp when zoomed in. */
 const SS = 2;
@@ -44,7 +47,7 @@ const ctx2d = (c: HTMLCanvasElement, readback: boolean): CanvasRenderingContext2
   return g;
 };
 
-export class Scene {
+export class Scene implements Surface {
   private readonly sceneBuf: HTMLCanvasElement;
   private readonly sceneCtx: CanvasRenderingContext2D;
   private readonly pickBuf: HTMLCanvasElement;
@@ -73,6 +76,58 @@ export class Scene {
     return this.sceneBuf;
   }
 
+  get bufferWidth(): number {
+    return BUF_W;
+  }
+
+  get bufferHeight(): number {
+    return BUF_H;
+  }
+
+  cellOrigin(cell: number): { x: number; y: number } {
+    const contest = Math.min(this.grid.contest[cell] ?? 0, MAX_CONTEST);
+    return cellTop(cell % COLS, Math.floor(cell / COLS), contest);
+  }
+
+  /**
+   * The hover mark: a crosshair whose arms break either side of the tile.
+   *
+   * Moved here from the view when the flat projection arrived — the shape belongs to the
+   * geometry, and a view that drew a rhombus onto a square grid would be drawing the wrong
+   * one for whichever projection it was not written against.
+   */
+  drawMark(g: CanvasRenderingContext2D, cell: number, colour: string, scale: number): void {
+    const cx = cell % COLS;
+    const cy = Math.floor(cell / COLS);
+    const contest = Math.min(this.contestAt(cell), MAX_CONTEST);
+    const { x, y } = cellTop(cx, cy, contest);
+
+    const arm = TW * 1.5;
+    const gapX = TW * 0.62;
+    const gapY = TH * 1.25;
+    const midY = y + TH / 2;
+    g.lineWidth = Math.max(1, 1.5 / scale);
+    g.strokeStyle = colour;
+    g.beginPath();
+    g.moveTo(x - gapX - arm, midY);
+    g.lineTo(x - gapX, midY);
+    g.moveTo(x + gapX, midY);
+    g.lineTo(x + gapX + arm, midY);
+    g.moveTo(x, midY - gapY - arm / 2);
+    g.lineTo(x, midY - gapY);
+    g.moveTo(x, midY + gapY);
+    g.lineTo(x, midY + gapY + arm / 2);
+    g.stroke();
+
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + TW / 2, y + TH / 2);
+    g.lineTo(x, y + TH);
+    g.lineTo(x - TW / 2, y + TH / 2);
+    g.closePath();
+    g.stroke();
+  }
+
   /** Contest count for a linear cell index. The view needs it to place the hover mark. */
   contestAt(index: number): number {
     return this.grid.contest[index] ?? 0;
@@ -83,8 +138,8 @@ export class Scene {
     this.sceneCtx.clearRect(0, 0, BUF_W, BUF_H);
     this.pickCtx.clearRect(0, 0, BUF_W, BUF_H);
     this.drawGround();
-    for (let cy = 0; cy < N; cy++) {
-      for (let cx = 0; cx < N; cx++) this.drawCell(cx, cy);
+    for (let cy = 0; cy < ROWS; cy++) {
+      for (let cx = 0; cx < COLS; cx++) this.drawCell(cx, cy);
     }
   }
 
@@ -123,9 +178,9 @@ export class Scene {
     const sHi = (2 * (r.y + r.h - OY + MAX_CONTEST * LIFT)) / TH;
 
     const cxLo = Math.max(0, Math.floor((sLo + dLo) / 2));
-    const cxHi = Math.min(N - 1, Math.ceil((sHi + dHi) / 2));
+    const cxHi = Math.min(COLS - 1, Math.ceil((sHi + dHi) / 2));
     const cyLo = Math.max(0, Math.floor((sLo - dHi) / 2));
-    const cyHi = Math.min(N - 1, Math.ceil((sHi - dLo) / 2));
+    const cyHi = Math.min(ROWS - 1, Math.ceil((sHi - dLo) / 2));
 
     // One clip per surface, not one per pass: on a GPU-backed canvas each save/clip/restore
     // can force a flush, and doing it twice per surface was measurable.
@@ -168,15 +223,15 @@ export class Scene {
     // is what actually makes the region small.
     g.strokeStyle = GRID_LINE;
     g.lineWidth = 1;
-    for (let i = 0; i <= N; i += 8) {
+    for (let i = 0; i <= Math.max(COLS, ROWS); i += 8) {
       this.strokeSegment(
         OX - i * (TW / 2), OY + i * (TH / 2),
-        OX + (N - i) * (TW / 2), OY + (N + i) * (TH / 2),
+        OX + (COLS - i) * (TW / 2), OY + (COLS + i) * (TH / 2),
         clip,
       );
       this.strokeSegment(
         OX + i * (TW / 2), OY + i * (TH / 2),
-        OX + (i - N) * (TW / 2), OY + (i + N) * (TH / 2),
+        OX + (i - ROWS) * (TW / 2), OY + (i + ROWS) * (TH / 2),
         clip,
       );
     }
@@ -320,7 +375,7 @@ export class Scene {
       const o = p * 4;
       if (data[o + 3]! < 250) continue; // blended against transparent paper
       const id = data[o]! + (data[o + 1]! << 8) + (data[o + 2]! << 16);
-      if (id < 1 || id > N * N) continue;
+      if (id < 1 || id > CELLS) continue;
       tally.set(id, (tally.get(id) ?? 0) + 1);
     }
     let best = 0;

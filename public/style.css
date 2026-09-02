@@ -206,16 +206,123 @@ body {
 
 /* ---- stage ------------------------------------------------------------------------ */
 
+/* The canvas has proportions of its own — 96 by 64 — and a screen does not. Fitting it into
+   the whole stage left a third of the width as empty ground on either side, which is exactly
+   the "nothing is there" the layout is trying to avoid. So the board takes the width its
+   aspect ratio asks for and the feed takes the rest. */
 .stage {
   position: relative;
+  display: flex;
+  gap: var(--s-2);
+  min-height: 0;
+}
+
+.board {
+  position: relative;
+  flex: none;
+  height: 100%;
+  aspect-ratio: 96 / 64;
+  max-width: 100%;
   background: var(--current-color-20);
   border: 1px solid var(--current-line);
   border-radius: var(--radius);
-  min-height: 0;
   overflow: hidden;
 }
 
-.stage canvas {
+.side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  background: var(--current-color-20);
+  border: 1px solid var(--current-line);
+  border-radius: var(--radius);
+  padding: var(--s-2);
+  overflow: hidden;
+}
+
+.side__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--current-color-40);
+  border-bottom: 1px solid var(--current-line);
+  padding-bottom: var(--s-1);
+}
+
+.side__count {
+  opacity: 0.6;
+  letter-spacing: 0.06em;
+  text-transform: none;
+}
+
+.feed {
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  flex: 1;
+}
+
+.feed li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 5px 0;
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  border-bottom: 1px solid var(--current-line);
+  cursor: pointer;
+  width: 100%;
+  background: none;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  text-align: left;
+}
+
+.feed li:hover .feed__at {
+  color: var(--current-color-40);
+}
+
+.feed__chip {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  border: 1px solid var(--current-line);
+}
+
+.feed__at {
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.feed__who {
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feed__ok {
+  margin-left: auto;
+  flex: none;
+  color: var(--current-color-40);
+}
+
+.feed__empty {
+  font-family: var(--font-micro);
+  font-size: var(--t-micro);
+  opacity: 0.45;
+  padding-top: var(--s-1);
+}
+
+.board canvas {
   display: block;
   width: 100%;
   height: 100%;
@@ -225,7 +332,7 @@ body {
 
 /* The canvas is focusable, so it needs a focus ring. Inset rather than outside: the stage
    clips its overflow, and a ring drawn on the boundary would be half-invisible. */
-.stage canvas:focus-visible {
+.board canvas:focus-visible {
   outline: 2px solid var(--current-color-40);
   outline-offset: -3px;
 }
@@ -245,7 +352,7 @@ body {
 }
 
 /* The shape signature as a corner cut, not a rounded box. */
-.stage__corner {
+.board .stage__corner {
   position: absolute;
   top: -1px;
   right: -1px;

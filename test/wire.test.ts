@@ -9,7 +9,7 @@ import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
 import { formatPlacement, parsePlacement } from "../src/canvas/wire.ts";
-import { N } from "../src/canvas/projection.ts";
+import { COLS, ROWS } from "../src/canvas/projection.ts";
 
 describe("parsePlacement", () => {
   it("reads the documented example", () => {
@@ -27,7 +27,7 @@ describe("parsePlacement", () => {
 
   it("accepts the first and last cell", () => {
     assert.deepEqual(parsePlacement("px 0,0 1 aaaaaa")?.cx, 0);
-    assert.equal(parsePlacement(`px ${N - 1},${N - 1} 1 aaaaaa`)?.cy, N - 1);
+    assert.equal(parsePlacement(`px ${COLS - 1},${ROWS - 1} 1 aaaaaa`)?.cy, ROWS - 1);
   });
 
   it("refuses a two-digit decimal step", () => {
@@ -41,8 +41,8 @@ describe("parsePlacement", () => {
   });
 
   it("refuses a cell outside the canvas", () => {
-    assert.equal(parsePlacement(`px ${N},0 1 aaaaaa`), null);
-    assert.equal(parsePlacement(`px 0,${N} 1 aaaaaa`), null);
+    assert.equal(parsePlacement(`px ${COLS},0 1 aaaaaa`), null);
+    assert.equal(parsePlacement(`px 0,${ROWS} 1 aaaaaa`), null);
     assert.equal(parsePlacement("px 99,99 1 aaaaaa"), null);
   });
 
@@ -94,8 +94,8 @@ describe("formatPlacement", () => {
     for (const [cx, cy, step] of [
       [-1, 0, 1],
       [0, -1, 1],
-      [N, 0, 1],
-      [0, N, 1],
+      [COLS, 0, 1],
+      [0, ROWS, 1],
       [0, 0, 0],
       [0, 0, 36],
       [0, 0, 1.5],

@@ -12,7 +12,8 @@ from __future__ import annotations
 import re
 from typing import NamedTuple
 
-N = 64
+COLS = 96
+ROWS = 64
 MIN_STEP = 1
 MAX_STEP = 35
 
@@ -44,7 +45,7 @@ def parse(text: str) -> Placement | None:
     cx, cy = int(match.group(1)), int(match.group(2))
     # Base36, not hex: hex is four bits and the palette outgrew it. 1-f are unchanged.
     step = int(match.group(3), 36)
-    if not (0 <= cx < N and 0 <= cy < N):
+    if not (0 <= cx < COLS and 0 <= cy < ROWS):
         return None
     if not (MIN_STEP <= step <= MAX_STEP):
         return None

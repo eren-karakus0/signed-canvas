@@ -71,8 +71,12 @@ class NotAPlacement(unittest.TestCase):
             "px  12,47 3 k8f2a1",  # doubled space
             "px 12,47 03 k8f2a1",  # decimal step: the mistake that cost 85 lines
             "px 12,47 0 k8f2a1",  # 0 is the empty cell, not a colour
-            "px 64,0 1 abcdef",  # off the canvas
+            # The canvas is 96 wide and 64 tall, so the two axes have different bounds
+            # and each needs its own case — one shared number would have stopped testing
+            # the width the moment it stopped matching the height.
+            "px 96,0 1 abcdef",
             "px 0,64 1 abcdef",
+            "px 95,64 1 abcdef",
             "px 12,47 3 K8F2A1",  # uppercase token
             "px 12,47 3 k8f2a",  # short token
             "px 12,47 3 k8f2a1x",  # long token
@@ -82,6 +86,13 @@ class NotAPlacement(unittest.TestCase):
         ):
             with self.subTest(line=line):
                 self.assertIsNone(parse(line), f"{line!r} must not paint")
+
+    def test_the_far_corner_is_inside(self) -> None:
+        # The counterpart to the refusals above: if both bounds were wrong in the same
+        # direction, the refusal cases alone would still pass.
+        placement = parse("px 95,63 1 abcdef")
+        assert placement is not None
+        self.assertEqual((placement.cx, placement.cy), (95, 63))
 
     def test_a_step_past_the_palette_is_refused_by_value_not_by_shape(self) -> None:
         # `z` is 35 and paintable; there is no single base36 digit above it, so the bound is

@@ -38,8 +38,14 @@ from __future__ import annotations
 import base64
 from typing import Iterable, Sequence
 
-N = 64
-CELLS = N * N
+# The canvas grew rightwards on 2026-09-02 — a square of pixels in a wide stage left the
+# screen half empty. Rightwards only: a placement is a signature over `px <x>,<y> …`, so a
+# cell that moved would not move a pixel, it would orphan one. 96 is the ceiling the wire
+# format allows (`\d{1,2}`), and the height stayed at 64 because the room already holds
+# `px 58,54`.
+COLS = 96
+ROWS = 64
+CELLS = COLS * ROWS
 CELL_BYTES = CELLS
 WITNESS_BYTES = CELLS // 8
 
@@ -69,11 +75,11 @@ def pack_stack(rows: Iterable) -> bytes:
     """
     history: dict[int, list[int]] = {}
     for row in rows:
-        if not (0 <= row.cx < N and 0 <= row.cy < N):
+        if not (0 <= row.cx < COLS and 0 <= row.cy < ROWS):
             raise SnapshotError(f"cell out of bounds: {row.cx},{row.cy}")
         if not (1 <= row.step <= MAX_STEP):
             raise SnapshotError(f"step {row.step} is not paintable")
-        index = row.cy * N + row.cx
+        index = row.cy * COLS + row.cx
         # Keep one more than the tower needs: the newest is the top, which lives in `cells`.
         levels = history.setdefault(index, [])
         levels.append(row.step)
@@ -119,11 +125,11 @@ def pack(rows: Iterable) -> tuple[bytes, bytes]:
     witnessed = bytearray(WITNESS_BYTES)
 
     for row in rows:
-        if not (0 <= row.cx < N and 0 <= row.cy < N):
+        if not (0 <= row.cx < COLS and 0 <= row.cy < ROWS):
             raise SnapshotError(f"cell out of bounds: {row.cx},{row.cy}")
         if not (1 <= row.step <= MAX_STEP):
             raise SnapshotError(f"step {row.step} is not paintable")
-        index = row.cy * N + row.cx
+        index = row.cy * COLS + row.cx
         cells[index] = row.step
         if row.witnessed:
             witnessed[index // 8] |= 1 << (index % 8)
@@ -155,7 +161,7 @@ def unpack(cells: bytes, witnessed: bytes) -> list[tuple[int, int, int, bool]]:
         if step == 0:
             continue
         proven = bool(witnessed[index // 8] & (1 << (index % 8)))
-        out.append((index % N, index // N, step, proven))
+        out.append((index % COLS, index // COLS, step, proven))
     return out
 
 
@@ -187,12 +193,12 @@ def set_cell(
     Raises:
         SnapshotError: if the cell is outside the canvas or the step is unpaintable.
     """
-    if not (0 <= cx < N and 0 <= cy < N):
+    if not (0 <= cx < COLS and 0 <= cy < ROWS):
         raise SnapshotError(f"cell out of bounds: {cx},{cy}")
     if not (1 <= step <= MAX_STEP):
         raise SnapshotError(f"step {step} is not paintable")
 
-    index = cy * N + cx
+    index = cy * COLS + cx
     cells[index] = step
 
     bit = 1 << (index % 8)

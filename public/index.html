@@ -46,6 +46,7 @@
   </header>
 
   <section class="stage" aria-label="The canvas">
+    <div class="board">
     <!-- `application`, not `img`: it is a control. Focusable, so the arrows reach it. -->
     <canvas id="canvas" tabindex="0" role="application"
             aria-label="A 64 by 64 pixel canvas. Arrow keys move a cell at a time, shift and
@@ -94,6 +95,18 @@
         </div>
       </div>
     </div>
+    </div>
+
+    <!-- The canvas keeps its own proportions, so whatever the screen has left over goes
+         here rather than staying empty ground beside it. -->
+    <aside class="side" aria-label="Recent placements">
+      <p class="side__head">
+        <span>live</span>
+        <span class="side__count" id="watching"></span>
+      </p>
+      <ol class="feed" id="live-feed"></ol>
+      <p class="feed__empty" id="live-empty">waiting for the next pixel…</p>
+    </aside>
   </section>
 
   <!-- Three groups on two rows rather than six stacked blocks. The footer was 191px tall at

@@ -22,7 +22,17 @@ import unittest
 from pathlib import Path
 
 from archive import Archive
-from snapshot import MAX_STACK, STACK_BYTES, get_level, pack, pack_stack, set_level
+from snapshot import (
+    CELLS,
+    COLS,
+    MAX_STACK,
+    ROWS,
+    STACK_BYTES,
+    get_level,
+    pack,
+    pack_stack,
+    set_level,
+)
 
 ROOM = "p-canvas-test"
 DID = "did:key:z6MkkQQzb6WvXYaN1Q9F4aJhCZ8SsuUmZv8mYnZ8Zt3rjKQ9"
@@ -37,7 +47,7 @@ class Row:
 
 
 def tower(plane: bytes, cx: int, cy: int) -> list[int]:
-    index = cy * 64 + cx
+    index = cy * COLS + cx
     return [get_level(plane, index, k) for k in range(MAX_STACK)]
 
 
@@ -82,10 +92,10 @@ class Packing(unittest.TestCase):
         # Exhaustive over the layout rather than a spot check: this is index arithmetic, and
         # index arithmetic is wrong at exactly one place or not at all.
         plane = bytearray(STACK_BYTES)
-        for index in range(0, 64 * 64, 37):
+        for index in range(0, CELLS, 37):
             for level in range(MAX_STACK):
                 set_level(plane, index, level, (index + level) % 15 + 1)
-        for index in range(0, 64 * 64, 37):
+        for index in range(0, CELLS, 37):
             for level in range(MAX_STACK):
                 self.assertEqual(
                     get_level(plane, index, level), (index + level) % 15 + 1
@@ -96,8 +106,14 @@ class Packing(unittest.TestCase):
             pack_stack([Row(0, 0, 36)])
 
     def test_a_cell_off_the_canvas_is_refused(self) -> None:
+        # Both axes: the canvas is wider than it is tall, so one bound would not catch the
+        # other being wrong.
         with self.assertRaises(Exception):
-            pack_stack([Row(64, 0, 3)])
+            pack_stack([Row(COLS, 0, 3)])
+        with self.assertRaises(Exception):
+            pack_stack([Row(0, ROWS, 3)])
+        self.assertEqual(tower(pack_stack([Row(COLS - 1, ROWS - 1, 4), Row(COLS - 1, ROWS - 1, 9)]),
+                               COLS - 1, ROWS - 1)[0], 4)
 
 
 class AgainstTheArchive(unittest.TestCase):
@@ -162,7 +178,7 @@ class AgainstTheArchive(unittest.TestCase):
 
         def top_of(cx: int, cy: int) -> int:
             # One byte per cell since the palette outgrew four bits.
-            return cells[cy * 64 + cx]
+            return cells[cy * COLS + cx]
 
         self.assertEqual(top_of(3, 3), 3)
         self.assertEqual(tower(plane, 3, 3), [1, 2, 0, 0, 0, 0, 0, 0])

@@ -52,7 +52,7 @@ import urllib.request
 
 from archive import Archive, ArchiveError
 from placement import parse as parse_placement
-from snapshot import MAX_STACK, encode, pack, pack_stack
+from snapshot import COLS, MAX_STACK, ROWS, encode, pack, pack_stack
 from verifier import (
     DID_PATTERN,
     SIGNATURE_PATTERN,
@@ -333,6 +333,12 @@ class Handler(BaseHTTPRequestHandler):
             200,
             {
                 "seq": stats.last_seq,
+                # The shape of the canvas, so a client can refuse rather than guess. The
+                # planes are flat arrays indexed by `cy * cols + cx`; read with the wrong
+                # width they decode into a picture that is wrong everywhere and looks like a
+                # rendering fault rather than a mismatch.
+                "cols": COLS,
+                "rows": ROWS,
                 "cells": encode(cells),
                 "witnessed": encode(witnessed),
                 "stack": encode(stack),
@@ -373,7 +379,7 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def _cell(self, cx: int, cy: int) -> None:
-        if not (0 <= cx < 64 and 0 <= cy < 64):
+        if not (0 <= cx < COLS and 0 <= cy < ROWS):
             return self._fail(400, "cell out of bounds")
         with self._open() as archive:
             rows = archive.history(cx, cy)
