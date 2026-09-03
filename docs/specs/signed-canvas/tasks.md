@@ -959,9 +959,25 @@ The clipboard is tried first and a file is the fallback, and the status line say
 happened. Reporting "copied" after a download is how someone pastes an empty clipboard into a
 post.
 
-*Still to deploy:* `/presence/<id>` and `/leaders` are new archive routes. The site handles
-their absence by showing nothing, so production is correct but quiet until the archive on the
-tunnel host is updated.
+**T-29 · Deploying the new archive routes** — ✅ **DONE 2026-09-03**
+
+`/presence/<id>`, `/leaders` and the widened `/cell` all live on the archive, so all three
+were dark in production until the tunnel host was updated. The site degraded correctly in the
+meantime — it showed nothing rather than a zero — which is what made the gap safe to leave
+open for a few hours rather than urgent.
+
+*The files were compared before being overwritten, not after.* Five of the seven differed from
+the repo, which is more than this work touched. Diffed with comments and whitespace removed:
+`placement.py`, `snapshot.py` and `ingest.py` had **zero** behavioural differences — the local
+formatter had reworked them — and the real changes were exactly 46 lines in `archive.py`
+(`leaders`) and 52 in `app.py` (the two routes and the cell pattern). Copying without checking
+would have been the same result by luck; the check is what makes it not luck.
+
+Deployed with a backup taken first, then an import check *before* the restart: a unit that
+starts and fails its first import is restarted forever by systemd with the reason buried in
+the journal, which is worse than one that never starts. All five routes answered 200 on the
+host, then through the tunnel and the Vercel proxy, then in the browser: **2 watching**, a
+HOLDING list of five, and the archive at seq 518 with lag 0.
 
 **T-21 · Where the interface answers** — ✅ **DONE 2026-09-02**
 *Done when:* `sagla.py` is clean and screenshots at 390 px wide are legible.
