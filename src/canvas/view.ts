@@ -13,6 +13,10 @@ const MAX_SCALE = 3;
 /** Pointer travel, in CSS pixels, above which a press is a drag and not a click. */
 const DRAG_SLOP = 4;
 
+/* How long the ring on a jumped-to cell lasts. Long enough to find the cell, short
+ * enough that it is gone before the next thing is clicked. */
+const FLASH_MS = 1600;
+
 /** Where a hover came from. A keyboard cursor is nowhere near the mouse, and anything that
  *  positions itself by the pointer has to know that. */
 export type HoverSource = "pointer" | "keyboard";
@@ -32,6 +36,8 @@ export class View {
   private boxW = 0;
   private boxH = 0;
   private hovered: number | null = null;
+  private flashCell: number | null = null;
+  private flashFrom = 0;
   private frameQueued = false;
   /** Set while the pointer is down and past the slop threshold. */
   private dragging = false;
@@ -298,6 +304,23 @@ export class View {
     new ResizeObserver(() => this.resize()).observe(this.canvas);
   }
 
+  /**
+   * Ring a cell for a moment, so a jump to it lands somewhere the eye can find.
+   *
+   * Centring alone is not enough: on a canvas of nine thousand cells, "it is in the middle
+   * now" asks the person to find a seven-pixel square among its neighbours, and by the time
+   * they have, they have forgotten which one they clicked. The ring says which.
+   *
+   * Drawn over the blit rather than into the scene bitmap: it is not part of the canvas, it
+   * belongs to this viewer for a second and a half, and writing it into the bitmap would mean
+   * repainting the cell to remove it.
+   */
+  flash(cell: number): void {
+    this.flashCell = cell;
+    this.flashFrom = performance.now();
+    this.request();
+  }
+
   request(): void {
     if (this.frameQueued) return;
     this.frameQueued = true;
@@ -325,6 +348,64 @@ export class View {
     if (this.hovered !== null) {
       this.scene.drawMark(g, this.hovered, this.accentColour, this.scale);
     }
+
+    this.drawFlash(g);
+  }
+
+  /* The ring, and the frames that carry it.
+   *
+   * Time-based rather than frame-counted, and re-requested from inside the paint: a hidden
+   * tab stops being given frames, and a counter would resume mid-animation minutes later
+   * with the ring hanging over a cell nobody is looking for any more.
+   */
+  private drawFlash(g: CanvasRenderingContext2D): void {
+    if (this.flashCell === null) return;
+    const through = (performance.now() - this.flashFrom) / FLASH_MS;
+    if (through >= 1) {
+      this.flashCell = null;
+      return;
+    }
+
+    const { x, y } = this.scene.cellOrigin(this.flashCell);
+    const side = this.scene.cellSide;
+    const cx = x + side / 2;
+    const cy = y + side / 2;
+
+    /* Three rings, a quarter cycle apart, travelling far enough to be seen.
+     *
+     * The first version reached 2.7 cells and was invisible: the board is always fitted to
+     * its frame, so a cell is about seven screen pixels and a ring of that size is a dot.
+     * The zoom is what changes, not the reach — so the radius is set in cells and the stroke
+     * is divided by the scale, which keeps both constant on screen at any zoom. */
+    for (const offset of [0, 0.25, 0.5]) {
+      const phase = through - offset;
+      if (phase <= 0 || phase >= 1) continue;
+      const radius = side * (0.5 + phase * 7);
+      g.globalAlpha = (1 - phase) ** 2;
+      g.strokeStyle = this.accentColour;
+      g.lineWidth = Math.max(1, 3 / this.scale);
+      g.beginPath();
+      g.arc(cx, cy, radius, 0, Math.PI * 2);
+      g.stroke();
+    }
+
+    /* The cell keeps a hard outline for the whole flash: the rings say "look here", this says
+     * which square was meant, which is the question that was asked.
+     *
+     * Two strokes, light under accent. A single accent outline disappears against the cyan in
+     * the logo and against the pale steps, and the cell that is hardest to find is exactly the
+     * one whose neighbours are its own colour. */
+    const box = side * 0.9;
+    g.globalAlpha = 1 - through * 0.35;
+    g.lineWidth = Math.max(2, 5 / this.scale);
+    g.strokeStyle = "#FBFDFD";
+    g.strokeRect(x - box / 2, y - box / 2, side + box, side + box);
+    g.lineWidth = Math.max(1, 2.5 / this.scale);
+    g.strokeStyle = this.accentColour;
+    g.strokeRect(x - box / 2, y - box / 2, side + box, side + box);
+    g.globalAlpha = 1;
+
+    this.request();
   }
 
   /** The cell under the pointer, or null. Read after an async lookup to check the pointer

@@ -40,6 +40,11 @@ export interface Surface {
    *  pointer, which is what a keyboard cursor needs. */
   cellOrigin(cell: number): { x: number; y: number };
 
+  /** Roughly how wide one cell is, in buffer space. The two projections disagree about what
+   *  "wide" means — a square face on, a rhombus at 2:1 — so this is the number to scale a
+   *  decoration by, not a geometry to draw with. */
+  readonly cellSide: number;
+
   /**
    * Draw the hover mark for `cell`, in buffer space.
    *

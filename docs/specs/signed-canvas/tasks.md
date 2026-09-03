@@ -106,7 +106,8 @@ Two ADRs, three-plus candidates each, weights fixed before scoring:
 - **Client:** Canvas 2D with the scene cached offscreen, esbuild, no framework.
 
 **The measurement that changed the plan.** 180 frames of pan and zoom over a fully-painted
-4,096-cell scene, headless Chromium 145 (`bench/fps-bench.html`):
+4,096-cell scene, headless Chromium 145 (`bench/fps-bench.html`, since removed in favour of
+benchmarking the real build out of `dist-bench/`):
 
 | strategy | p50 | p95 |
 |---|---|---|

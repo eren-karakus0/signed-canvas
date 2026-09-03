@@ -130,6 +130,10 @@ export class FlatScene implements Surface {
     g.strokeRect(x + 0.5, y + 0.5, CELL - 1, CELL - 1);
   }
 
+  get cellSide(): number {
+    return CELL;
+  }
+
   cellOrigin(cell: number): { x: number; y: number } {
     const { x, y } = this.cellRect(cell % COLS, Math.floor(cell / COLS));
     return { x, y };

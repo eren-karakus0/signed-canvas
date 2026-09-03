@@ -91,7 +91,10 @@ aksan rengini kullanır. Eleme sebebi de buydu: Ember'in `11` adımı aksandan y
 - **Kiln** (oker → kemik → kül → lacivert) — en sakini, büyük dolu alanlar için en iyisi.
   Elendi: soğuk ucu tamamen kromasız, tuval "gri bir şeye" dönüşüyor.
 
-Referans render: `pal-1.png` · `pal-2.png` · `pal-3.png` · üretici `palette-lab.html`
+Referans render: `pal-1.png` · `pal-2.png` · `pal-3.png`. Bunları üreten `palette-lab.html`
+silindi: paletin ayrı bir kopyasını taşıyordu ve beyaz eklenince o kopya bayatladı — kimsenin
+koşturmadığı, sessizce yanlışa dönen bir referans, referans değildir. Görüntüler kalıyor,
+paletin kendi denetimi artık `test/palette.test.ts`.
 
 ## Tipografi
 
@@ -166,7 +169,7 @@ yolu izdüşümdür, kamera değil. Paralel çizgiler paralel kalır, uzaktaki h
 - Zemin ızgarası `#DCE7EB`, 8 hücrede bir, 1px — üstünde durulan milimetrik kâğıt.
 - Nişangâh **bir kez** kullanılır: en çok çekişilen hücrede, aksan renginde.
 
-Doğrulama: `palette-lab.html` bu dilin çalışan referansı; üç palet aynı sahne, aynı ışık
+Doğrulama (2026-08-28, `palette-lab.html` ile; dosya sonradan silindi): üç palet aynı sahne, aynı ışık
 ve aynı içerikle render edilip karşılaştırıldı.
 
 ## Uygulama notları — T-7'den

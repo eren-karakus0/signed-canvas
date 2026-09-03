@@ -38,7 +38,9 @@ does not.** So this ADR settles both, render first.
 ### Measurement, not argument
 
 180 frames of continuous pan and zoom over a fully-painted 4,096-cell scene, headless
-Chromium 145, `bench/fps-bench.html`. Target: p95 ≤ 16.7 ms.
+Chromium 145, `bench/fps-bench.html`. Target: p95 ≤ 16.7 ms. (That harness was a standalone
+copy of the renderer and was removed once `npm run bench` began driving the real build out of
+`dist-bench/`; a benchmark measuring its own copy of the code measures the wrong thing.)
 
 | | p50 | p95 | max | verdict |
 |---|---|---|---|---|

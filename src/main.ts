@@ -713,7 +713,15 @@ function addToFeed(placement: LivePlacement): void {
   }
 
   const jump = (): void => {
-    view.centreOn(placement.cy * COLS + placement.cx);
+    const cell = placement.cy * COLS + placement.cx;
+    view.centreOn(cell);
+    // Centring alone puts the cell in the middle and leaves the person to find one small
+    // square among nine thousand. The ring says which one they clicked.
+    view.flash(cell);
+    // The readout follows too, so the answer to "what is this pixel" is on screen without a
+    // second action — the row was a question about a specific cell.
+    showCell(cell);
+    inspectCell(cell);
   };
   row.addEventListener("click", jump);
   row.addEventListener("keydown", (event) => {

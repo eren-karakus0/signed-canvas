@@ -84,6 +84,12 @@ export class Scene implements Surface {
     return BUF_H;
   }
 
+  get cellSide(): number {
+    // The tile is a rhombus TW across and TH tall, so neither dimension is "the side". The
+    // width is the one a ring drawn around the cell has to clear.
+    return TW;
+  }
+
   cellOrigin(cell: number): { x: number; y: number } {
     const contest = Math.min(this.grid.contest[cell] ?? 0, MAX_CONTEST);
     return cellTop(cell % COLS, Math.floor(cell / COLS), contest);
