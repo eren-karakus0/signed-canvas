@@ -167,6 +167,12 @@ conforming accepts in the room. Our lock now names the right contract, and the d
 `locked` — the counterparty has gone quiet, which is the outcome A-1 named as likeliest and
 which the task defines as an acceptable completion. Refund time is 18 hours after the offer.
 
+*The silence is measured, not assumed.* Twenty-five minutes of following the room after the
+lock read **8,274 messages, none of which named this contract**, and the commission region is
+untouched at 0 of 100 cells. So the counterparty accepted within one second of the offer and
+has done nothing since — which is the shape the funnel measurement predicted: accepting is
+free and instant, revealing is neither.
+
 **C-7 ✅** The transcript generator, run against the live deal.
 
 ## What the room measured like, 2026-09-13
