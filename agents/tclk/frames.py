@@ -34,8 +34,14 @@ from typing import Any
 #: The version prefix. An incompatible revision changes this, never the field semantics.
 PREFIX = "tclk1 "
 
-#: Domain separator for the contract id, from SPEC.md §3.1.
-ID_DOMAIN = "FLOP::tclk::v1|offer|"
+#: Domain separators for the two ids, from SPEC.md §3.1 and §3.2. They are different ids:
+#: an offer has one from the moment it is built, and the *contract* comes into existence
+#: only when somebody accepts, binding the offer and that acceptance together.
+OFFER_DOMAIN = "FLOP::tclk::v1|offer|"
+CONTRACT_DOMAIN = "FLOP::tclk::v1|contract|"
+
+#: The acceptance fields the contract id binds. `paymentKey` only appears for point locks.
+ACCEPT_CORE = ("ref", "from", "statement", "paymentKey", "nonce")
 
 FRAME_TYPES = frozenset(
     {"offer", "accept", "lock", "reveal", "refund", "cancel", "receipt", "heartbeat"}
@@ -138,7 +144,30 @@ def contract_id(offer: dict[str, Any]) -> str:
     frame carrying a non-ASCII character, and every later frame names the contract by it.
     """
     without_id = {key: value for key, value in offer.items() if key != "id"}
-    payload = ID_DOMAIN + canonical(strip_unset(without_id))
+    payload = OFFER_DOMAIN + canonical(strip_unset(without_id))
+    return "0x" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def contract_id_from_accept(offer: dict[str, Any], accept: dict[str, Any]) -> str:
+    """The contract id an accept creates, binding the full offer to that acceptance.
+
+    Not the offer id. An offer has an id from the moment it is built; a *contract* exists only
+    once somebody accepts, and every frame after the accept names it by this. Getting the two
+    confused produces `lock`, `reveal` and `receipt` frames that name something the
+    counterparty has never heard of — which is what this project did until a live counterparty
+    proved otherwise.
+
+    The spec describes the payload as ``canonical {offer, accept-core}``; the key on the wire
+    is ``accept``, not ``accept-core``. Verified by recomputing the ids of conforming accepts
+    taken from the live room — prose settles nothing that bytes can settle.
+
+    :raises FrameError: if the offer or the acceptance is missing what the id binds.
+    """
+    core = {key: accept[key] for key in ACCEPT_CORE if key in accept and accept[key] is not None}
+    for required in ("ref", "from", "statement", "nonce"):
+        if required not in core:
+            raise FrameError(f"an acceptance binds {required}, and this one has none")
+    payload = CONTRACT_DOMAIN + canonical({"accept": core, "offer": strip_unset(offer)})
     return "0x" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -230,6 +259,24 @@ def build_accept(
         "contract": _checked(contract, _HEX32, "contract", "0x + 64 lowercase hex"),
         "nonce": new_nonce(),
     }
+
+
+def accept_offer(*, sender: str, offer: dict[str, Any], statement: str) -> dict[str, Any]:
+    """An `accept` with its contract id derived rather than guessed.
+
+    The two-step version above lets a caller pass any contract; this one computes it from the
+    offer being accepted, which is what the protocol requires and what a counterparty will
+    recompute on the other side.
+    """
+    core = {
+        "type": "accept",
+        "from": _valid_did(sender),
+        "ref": _checked(offer["id"], _HEX32, "ref", "the offer id"),
+        "statement": _checked(statement, _HEX32, "statement", "0x + 64 lowercase hex"),
+        "nonce": new_nonce(),
+    }
+    core["contract"] = contract_id_from_accept(offer, core)
+    return core
 
 
 def build_lock(*, sender: str, contract: str, rail: str, ref: str) -> dict[str, Any]:

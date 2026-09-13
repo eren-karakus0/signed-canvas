@@ -47,17 +47,13 @@ def an_offer() -> dict:
 def entries_through(position: str) -> tuple[list[dict], str, str]:
     """Recorded entries up to and including `position`, plus the secret and statement."""
     offer = an_offer()
-    contract = offer["id"]
     secret, statement = frames.new_secret()
+    # The contract id is derived from the offer and this acceptance, not taken from the offer.
+    accept = frames.accept_offer(sender=PAYEE, offer=offer, statement=statement)
+    contract = accept["contract"]
     built = [
         ("offer", PAYER, offer),
-        (
-            "accept",
-            PAYEE,
-            frames.build_accept(
-                sender=PAYEE, ref=contract, statement=statement, contract=contract
-            ),
-        ),
+        ("accept", PAYEE, accept),
         (
             "lock",
             PAYER,
@@ -235,33 +231,41 @@ class AcceptGuards(unittest.TestCase):
         self.deal = deal_module.rebuild(self.entries, NOW_MS)
 
     def test_an_author_cannot_accept_their_own_offer(self) -> None:
-        frame = frames.build_accept(
-            sender=PAYER,
-            ref=self.deal.contract,
-            statement=self.statement,
-            contract=self.deal.contract,
+        frame = frames.accept_offer(
+            sender=PAYER, offer=self.deal.offer, statement=self.statement
         )
         result = deal_module.apply(self.deal, frame, PAYER, NOW_MS)
         self.assertFalse(result.ok)
         self.assertIn("its own author", result.reason)
 
     def test_an_accept_after_the_offer_expired_is_refused(self) -> None:
-        frame = frames.build_accept(
-            sender=PAYEE,
-            ref=self.deal.contract,
-            statement=self.statement,
-            contract=self.deal.contract,
+        frame = frames.accept_offer(
+            sender=PAYEE, offer=self.deal.offer, statement=self.statement
         )
         result = deal_module.apply(self.deal, frame, PAYEE, NOW_MS + 3 * HOUR_MS)
         self.assertFalse(result.ok)
         self.assertIn("expired", result.reason)
+
+    def test_an_accept_whose_contract_id_does_not_recompute_is_refused(self) -> None:
+        """The check the spec makes mandatory, and the bug a live counterparty exposed.
+
+        This project used the offer id as the contract id. Every frame after the accept would
+        then have named something the counterparty never agreed to.
+        """
+        frame = frames.accept_offer(
+            sender=PAYEE, offer=self.deal.offer, statement=self.statement
+        )
+        frame["contract"] = "0x" + "f" * 64
+        result = deal_module.apply(self.deal, frame, PAYEE, NOW_MS)
+        self.assertFalse(result.ok)
+        self.assertIn("does not recompute", result.reason)
 
     def test_an_accept_naming_a_different_offer_is_refused(self) -> None:
         frame = frames.build_accept(
             sender=PAYEE,
             ref="0x" + "d" * 64,
             statement=self.statement,
-            contract=self.deal.contract,
+            contract="0x" + "e" * 64,
         )
         result = deal_module.apply(self.deal, frame, PAYEE, NOW_MS)
         self.assertFalse(result.ok)
@@ -300,7 +304,7 @@ class Resuming(unittest.TestCase):
                 tempfile.TemporaryDirectory() as folder,
             ):
                 entries, secret, _ = entries_through(position)
-                contract = entries[0]["frame"]["id"]
+                contract = entries[0]["frame"]["id"]  # the record is filed under the offer
 
                 # Write the deal as the first process would have, then drop every reference
                 # to it — the second process gets nothing but the file.
@@ -324,7 +328,9 @@ class Resuming(unittest.TestCase):
                         rebuilt, resumer, rail="paper", ref="tx-1", secret=secret
                     )
                     self.assertEqual(frame["type"], expected)
-                    self.assertEqual(frame["contract"], contract)
+                    # The derived contract id, not the offer id: after an accept the deal is
+                    # named by the contract, and a resumed process must name the same one.
+                    self.assertEqual(frame["contract"], rebuilt.contract)
 
     def test_a_settled_deal_resumes_into_owing_nothing(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
@@ -369,6 +375,32 @@ class Records(unittest.TestCase):
             )
             record.frames[0]["label"] = "tampered"
             self.assertEqual(record.frames[0]["label"], "offer")
+
+    def test_a_deal_answers_to_both_its_offer_id_and_its_contract_id(self) -> None:
+        """The same deal has two names, and a lookup may hold either.
+
+        It is filed under the offer id, which exists from the moment the offer is built, and
+        named by the contract id, which exists only once somebody accepts. A follower resuming
+        from the contract id could not find its own record until this existed.
+        """
+        with tempfile.TemporaryDirectory() as folder:
+            entries, _, _ = entries_through("accept")
+            offer_id = entries[0]["frame"]["id"]
+            contract_id = entries[1]["frame"]["contract"]
+            self.assertNotEqual(offer_id, contract_id)
+
+            record = DealRecord.open(Path(folder), offer_id, payer=PAYER)
+            for entry in entries:
+                record.append(
+                    label=entry["label"], room=entry["room"], seq=entry["seq"],
+                    sender=entry["from"], frame=entry["frame"],
+                )
+            for identifier in (offer_id, contract_id):
+                with self.subTest(identifier=identifier[:12]):
+                    found = DealRecord.find(Path(folder), identifier)
+                    self.assertEqual(found.path, record.path)
+            with self.assertRaises(RecordError):
+                DealRecord.find(Path(folder), "0x" + "9" * 64)
 
     def test_a_file_that_is_not_a_record_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as folder:

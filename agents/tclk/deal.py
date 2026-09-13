@@ -127,6 +127,8 @@ def rebuild(entries: list[dict[str, Any]], now_ms: int) -> Deal:
     payer = offer["from"] if offer.get("role") == "payer" else ""
     payee = "" if payer else offer["from"]
     deal = Deal(
+        # Until somebody accepts there is no contract, only an offer. `contract` holds the
+        # offer id in the meantime so the field is never empty, and the accept replaces it.
         contract=offer["id"],
         payer=payer,
         payee=payee,
@@ -185,8 +187,23 @@ def apply(deal: Deal, frame: dict[str, Any], sender: str, now_ms: int) -> Applie
     if kind == "accept":
         if now_ms >= int(deal.offer.get("expiresMs", 0)):
             return Applied(deal.state, False, "the offer has expired")
-        if frame.get("contract") != deal.contract or frame.get("ref") != deal.contract:
-            return Applied(deal.state, False, "accept does not name this offer")
+        if frame.get("ref") != deal.offer.get("id"):
+            return Applied(deal.state, False, "accept does not answer this offer")
+        # The contract id is not the offer id: it comes into existence here, binding the full
+        # offer to this acceptance, and both sides recompute it. A mismatch rejects the frame
+        # — the spec says so, and it is the only thing stopping two parties from proceeding
+        # with different ideas of what they agreed.
+        try:
+            expected = frames.contract_id_from_accept(deal.offer, frame)
+        except frames.FrameError as exc:
+            return Applied(deal.state, False, f"accept cannot be bound to a contract: {exc}")
+        if frame.get("contract") != expected:
+            return Applied(
+                deal.state,
+                False,
+                f"contract id does not recompute: {str(frame.get('contract'))[:14]}… "
+                f"against {expected[:14]}…",
+            )
         statement = frame.get("statement", "")
         if not isinstance(statement, str) or len(statement) != 66:
             return Applied(deal.state, False, "a hash lock needs a 32-byte statement")
@@ -231,6 +248,8 @@ def _advance(deal: Deal, frame: dict[str, Any], sender: str, state: State) -> De
     fields["state"] = state
     if frame.get("type") == "accept":
         fields["statement"] = frame.get("statement", "")
+        # From here on every frame names the deal by the contract id, not the offer id.
+        fields["contract"] = frame["contract"]
         # The offer said which side its author took; the accepter is the other one.
         if deal.payer:
             fields["payee"] = sender

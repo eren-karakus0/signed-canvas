@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import deal as deal_module
 import job
-from record import DealRecord
+from record import DealRecord, RecordError
 
 ROOM_URL = "https://technocore.chat/r"
 
@@ -164,11 +164,11 @@ def main() -> int:
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
 
-    path = args.deals / f"{args.contract[2:18]}.json"
-    if not path.exists():
-        print(f"no deal record at {path}", file=sys.stderr)
+    try:
+        record = DealRecord.find(args.deals, args.contract)
+    except RecordError as exc:
+        print(exc, file=sys.stderr)
         return 1
-    record = DealRecord(path)
 
     delivery = None
     if args.plan:
@@ -179,7 +179,7 @@ def main() -> int:
             return 1
 
     document = render(record, delivery)
-    out = args.out or args.deals / f"{args.contract[2:18]}.md"
+    out = args.out or record.path.with_suffix(".md")
     out.write_text(document, encoding="utf-8")
     print(f"written: {out}  ({len(document)} characters)")
     return 0

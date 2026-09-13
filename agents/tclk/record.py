@@ -77,6 +77,31 @@ class DealRecord:
             record._write()
         return record
 
+    @classmethod
+    def find(cls, directory: Path, identifier: str) -> "DealRecord":
+        """The record for an offer id or a contract id.
+
+        A deal is filed under the offer id, because that exists from the moment the offer is
+        built. It is *named* by the contract id, which only exists once somebody accepts — so
+        the same deal answers to two identifiers, and anything looking one up may hold either.
+
+        :raises RecordError: if no record matches.
+        """
+        direct = directory / f"{identifier[2:18]}.json"
+        if direct.exists():
+            return cls(direct)
+        for path in sorted(directory.glob("*.json")):
+            record = cls(path)
+            if record.contract == identifier:
+                return record
+            frames = record.frames
+            if frames and frames[0].get("frame", {}).get("id") == identifier:
+                return record
+            for entry in frames:
+                if entry.get("frame", {}).get("contract") == identifier:
+                    return record
+        raise RecordError(f"no deal in {directory} answers to {identifier[:18]}…")
+
     @property
     def contract(self) -> str:
         return str(self._state.get("contract", ""))

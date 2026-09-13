@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import deal as deal_module
 import frames
-from record import DealRecord
+from record import DealRecord, RecordError
 
 BASE_URL = "https://technocore.chat"
 TIMEOUT_SECONDS = 30
@@ -79,15 +79,18 @@ def follow(record: DealRecord, room: str, since: int, until: float) -> dict[str,
                 frame = frames.decode(message.get("text", ""))
             except frames.FrameError:
                 continue
-            if (
-                frame.get("contract") != record.contract
-                and frame.get("ref") != record.contract
-            ):
+
+            current = deal_module.rebuild(record.frames, int(time.time() * 1000))
+            # Both names, because a deal has two: an `accept` answers the *offer* id, and
+            # everything after it names the *contract* id derived from that acceptance.
+            # Filtering on one of them silently drops half the conversation — which is how a
+            # reveal we were waiting for would have gone past unseen.
+            names = {current.contract, current.offer.get("id")}
+            if frame.get("contract") not in names and frame.get("ref") not in names:
                 continue
             counts["ours"] += 1
 
             sender = message.get("from", "")
-            current = deal_module.rebuild(record.frames, int(time.time() * 1000))
             result = deal_module.apply(current, frame, sender, int(time.time() * 1000))
             if not result.ok:
                 counts["refused"] += 1
@@ -121,11 +124,11 @@ def main() -> int:
     parser.add_argument("--deals", type=Path, default=Path("deals"))
     args = parser.parse_args()
 
-    path = args.deals / f"{args.contract[2:18]}.json"
-    if not path.exists():
-        print(f"no deal record at {path}", file=sys.stderr)
+    try:
+        record = DealRecord.find(args.deals, args.contract)
+    except RecordError as exc:
+        print(exc, file=sys.stderr)
         return 1
-    record = DealRecord(path)
     since = max(
         (entry["seq"] for entry in record.frames if entry["room"] == args.room),
         default=0,
