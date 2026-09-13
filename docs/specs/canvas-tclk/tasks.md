@@ -1,6 +1,7 @@
 # Signed Canvas × tclk — tasks
 
-**Traces:** [`design.md`](design.md). **Status:** draft, awaiting approval. Nothing started.
+**Traces:** [`design.md`](design.md). **Status:** C-1 to C-5 and C-7 done; C-6 open with a
+counterparty, awaiting their reveal. Updated 2026-09-13.
 
 Ordered by risk, not by dependency: the two things most likely to invalidate the plan are
 whether our frames are accepted as valid tclk at all, and whether any counterparty will
@@ -123,3 +124,61 @@ after building the state machine would be finding it out late.
 and may not resolve. If C-2 reveals that `tclk-offers` filters on `job.proto` (A-2), add a day
 and revisit FR-2 — the deliverable would then have to present as a recognised protocol rather
 than as its own shape.
+
+
+---
+
+# What happened
+
+**C-1 ✅** The canonical encoder and the contract id. The test that mattered was not ours:
+twenty-one real offers captured from the live room reproduce their own ids under our code.
+Vendoring the schema instead of working from the prose caught `ref` being two different fields
+sharing a name — a hex32 naming the offer in `accept`, a free rail reference everywhere else —
+and killed a guard in `encode` that could never fire.
+
+**C-2 ✅** Five frames, two identities we control, a `p-` room. All five landed, decoded and
+matched byte for byte. Marked `rehearsal: true` in its own first field. It answered what the
+room accepts; it could not answer whether our model of the protocol was right, because both
+sides held the same model.
+
+**C-3 ✅** The state machine as a pure function over the record, so resume is the normal path
+rather than a second one. Killed at each of the five positions, a fresh read emits the correct
+next frame. Five guards mutation-tested. Two design bugs surfaced: an open offer has no
+counterparty, so `owes` answered no to everyone and made the state unreachable; and the
+record's directory fsync raised on Windows.
+
+**C-4 ✅** `/region`, answering as of a sequence rather than as of now, because the canvas is
+world-writable. Mutation testing found the gap that mattered — swapping `MAX(seq)` for
+`MIN(seq)` left the suite green, because no cell in the sampled rectangle had ever been
+overpainted. There is a contested cell in it now. NFR-4 was corrected rather than quietly
+passed: its 200 ms end-to-end target was unreachable by any route here, `/health` included.
+
+**C-5 ✅** The job note lists all one hundred cells and both settlement routes, and says no
+rail holds value. 1,535 characters against an 8,192 limit.
+
+**C-6 — open.** The offer went to `/r/tclk-offers` at seq 3,924,698. **Ten agents accepted
+within twenty-four seconds**, the first one second after it landed, which makes A-1's
+pessimism wrong on the accept side. One of the ten conformed to the published schema.
+
+That accept exposed the real bug, and it is the one the rehearsal could not: **the contract id
+is not the offer id.** It is derived at accept time from the offer and the acceptance
+together, and every frame afterwards names it. Confirmed by recomputing 1,528 of 1,835
+conforming accepts in the room. Our lock now names the right contract, and the deal stands at
+`locked` — the counterparty has gone quiet, which is the outcome A-1 named as likeliest and
+which the task defines as an acceptable completion. Refund time is 18 hours after the offer.
+
+**C-7 ✅** The transcript generator, run against the live deal.
+
+## What the room measured like, 2026-09-13
+
+| | |
+|---|---|
+| `tclk-offers` last seq | 3,901,402 → 3,931,000+ in one afternoon |
+| accepts sampled | 8,467 |
+| …validating against tclk's own schema | 1,854 (22%) |
+| …omitting the required `contract` field | 6,589 (78%) |
+| conforming accepts whose contract id reproduces | 1,528 of 1,835 (83%) |
+
+Three quarters of the accept traffic does not satisfy the protocol's published schema. That is
+the context for the word **true** in "true agentic commerce", and it is the gap this work was
+built to sit in.

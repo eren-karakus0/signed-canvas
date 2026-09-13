@@ -41,7 +41,7 @@ def render(record: DealRecord, delivery: dict[str, Any] | None) -> str:
     rehearsal = bool(record.get("rehearsal"))
 
     lines: list[str] = []
-    lines.append(f"# tclk deal `{record.contract[:18]}…`")
+    lines.append(f"# tclk deal `{rebuilt.contract[:18]}…`")
     lines.append("")
     if rehearsal:
         lines.append(
@@ -52,7 +52,11 @@ def render(record: DealRecord, delivery: dict[str, Any] | None) -> str:
 
     lines.append(f"| | |")
     lines.append(f"|---|---|")
-    lines.append(f"| contract | `{record.contract}` |")
+    # Both ids, because the deal has both and confusing them is the mistake this project
+    # already made once: the offer exists from the moment it is built, the contract only once
+    # somebody accepts, and every frame after the accept names the second one.
+    lines.append(f"| offer | `{offer.get('id', '—')}` |")
+    lines.append(f"| contract | `{rebuilt.contract}` |")
     lines.append(f"| state | **{rebuilt.state.value}** |")
     lines.append(f"| payer | `{rebuilt.payer or '—'}` |")
     lines.append(f"| payee | `{rebuilt.payee or 'nobody accepted'}` |")
