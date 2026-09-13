@@ -16,3 +16,6 @@ canvas-key.hex
 
 .vercel
 .env*.local
+
+# Deal transcripts hold contract ids and secrets; they are records, not source.
+deals/
