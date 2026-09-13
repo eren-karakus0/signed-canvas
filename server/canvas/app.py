@@ -8,6 +8,7 @@ front and opened no port, so anything reachable from outside arrives through clo
     GET  /cell/<x>/<y>    every placement in one cell, oldest first  (FR-6)
     GET  /presence/<id>   record that a viewer is here; answer how many are
     GET  /leaders         the keys holding the most cells
+    GET  /activity        placements per bucket over the recent past
     POST /relay           forward one already-signed placement to technocore.chat
     POST /witness         attach a signature to an archived placement (FR-7)
     GET  /health          what the archive holds, including ingest lag
@@ -88,6 +89,12 @@ _PRESENCE = re.compile(r"^/presence/([0-9a-f]{16})$")
 # signers; a top ten is most of them and still reads as a ranking.
 LEADER_LIMIT = 10
 
+# Fourteen days at six hours a bucket: 56 bars, which is dense enough to show the shape of a
+# busy day and coarse enough that a quiet week is still one readable stretch rather than 336
+# empty slots.
+ACTIVITY_BUCKETS = 56
+ACTIVITY_BUCKET_HOURS = 6
+
 log = logging.getLogger("canvas.app")
 
 
@@ -165,6 +172,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._presence(match.group(1))
             if path == "/leaders":
                 return self._leaders()
+            if path == "/activity":
+                return self._activity()
         except ArchiveError as exc:
             return self._fail(409, str(exc))
         except Exception:
@@ -459,6 +468,28 @@ class Handler(BaseHTTPRequestHandler):
                     }
                     for leader in leaders
                 ]
+            },
+        )
+
+    def _activity(self) -> None:
+        """The canvas's pulse, as counts per bucket, oldest first.
+
+        Fourteen days at six-hour resolution rather than the two days a dashboard would
+        default to. Measured on 2026-09-13: the last 48 hours held 4 placements and the 14
+        days before them held 507, so a two-day window would have drawn a flat line under a
+        canvas that had just had its busiest day ever. The wider window says both true things
+        — that it was busy, and that it is quiet now — where the narrow one says only the
+        second and reads as a dead site.
+        """
+        now = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+        with self._open() as archive:
+            counts = archive.activity(ACTIVITY_BUCKETS, ACTIVITY_BUCKET_HOURS, now)
+        self._send(
+            200,
+            {
+                "buckets": counts,
+                "bucket_hours": ACTIVITY_BUCKET_HOURS,
+                "span_hours": ACTIVITY_BUCKETS * ACTIVITY_BUCKET_HOURS,
             },
         )
 

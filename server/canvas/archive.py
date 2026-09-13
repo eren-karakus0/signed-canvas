@@ -475,6 +475,44 @@ class Archive:
         )
         return [Row(**dict(row)) for row in self._db.execute(query, (cx, cy))]
 
+    def activity(self, buckets: int, bucket_hours: int, now: str) -> list[int]:
+        """How many placements landed in each of the last `buckets` windows, oldest first.
+
+        Bucketed here rather than in the browser because the alternative is every visitor
+        downloading the whole history to count it — the same answer computed from a much
+        larger download, once per person.
+
+        `now` is passed in rather than read from the clock so the result is a pure function of
+        the archive and the caller's time, which is what makes it testable at all.
+
+        :raises ValueError: if the window is not positive.
+        """
+        if buckets <= 0 or bucket_hours <= 0:
+            raise ValueError("buckets and bucket_hours must be positive")
+
+        span_hours = buckets * bucket_hours
+        # Integer division on the hour offset puts each row in its bucket. SQLite's julianday
+        # gives fractional days; multiplying by 24 gives hours back, and the floor of that
+        # over the bucket width is the index. Rows outside the window are filtered first so
+        # the arithmetic never runs on the whole table.
+        query = (
+            "SELECT CAST((julianday(?) - julianday(ts)) * 24 / ? AS INTEGER) AS bucket, "
+            "       COUNT(*) AS n "
+            "FROM placement "
+            "WHERE ts > datetime(?, ?) "
+            "GROUP BY bucket"
+        )
+        counts = [0] * buckets
+        for row in self._db.execute(query, (now, bucket_hours, now, f"-{span_hours} hours")):
+            index = row["bucket"]
+            if index is None or index < 0 or index >= buckets:
+                # A row timestamped in the future, or exactly on the boundary. Dropped rather
+                # than clamped: a clock skew should not pile onto the newest bar and read as a
+                # burst that did not happen.
+                continue
+            counts[buckets - 1 - index] = row["n"]
+        return counts
+
     def leaders(self, limit: int = 10) -> list[Leader]:
         """The keys with the most pixels, by cells currently held.
 

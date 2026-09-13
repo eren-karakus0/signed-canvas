@@ -169,6 +169,104 @@ body {
   flex: none;
 }
 
+/* The middle column takes whatever the two sides leave. It is the only part of the header
+   that grows with the viewport, which is deliberate: the gap it fills is the part that got
+   wider as the screen did — 188px at 1366, 742px at 1920. */
+.head__mid {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: var(--s-1);
+  align-content: end;
+}
+
+.pulse {
+  display: grid;
+  gap: 5px;
+}
+
+.pulse__head,
+.pulse__scale {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-micro);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin: 0;
+  color: var(--current-color-40);
+}
+
+.pulse__scale {
+  text-transform: none;
+  letter-spacing: 0.1em;
+  color: var(--current-color-100);
+  opacity: 0.45;
+}
+
+.pulse__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 46px;
+  border-bottom: 1px solid var(--current-line);
+}
+
+.pulse__bar {
+  flex: 1;
+  min-width: 1px;
+  background: var(--current-color-30);
+  border-radius: 1px 1px 0 0;
+}
+
+/* The bucket we are living through, so the eye lands on "now" rather than on the tallest
+   bar somewhere in the past. */
+.pulse__bar--now {
+  background: var(--current-color-40);
+}
+
+/* A quiet stretch is drawn, not skipped. Hiding the silence would turn a counter into
+   decoration, and the honest shape of this canvas so far is a burst and a wait. */
+.pulse__bar--none {
+  background: var(--current-line);
+  opacity: 0.5;
+}
+
+.verify {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-family: var(--font-micro);
+  font-size: 10px;
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.verify__label {
+  opacity: 0.55;
+  letter-spacing: 0.1em;
+}
+
+.verify code {
+  background: var(--current-color-10);
+  border: 1px solid var(--current-line);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  font-family: var(--font-micro);
+  font-size: 10px;
+}
+
+/* Below 1500px the middle column is removed entirely, not merely narrowed.
+   Measured: the gap it was built to fill is 742px at 1920 and 188px at 1366, and 56 bars do
+   not fit in 188. Worse, keeping it cost the header 74px of height at 1366 — height the board
+   was using. On a narrower screen the canvas is the thing worth the pixels, so this is a
+   feature for wide screens and says so. */
+@media (max-width: 1499px) {
+  .head__mid {
+    display: none;
+  }
+}
+
 .head__stat {
   font-family: var(--font-micro);
   font-size: var(--t-micro);

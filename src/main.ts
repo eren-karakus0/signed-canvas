@@ -17,6 +17,7 @@ import { formatPlacement, parsePlacement } from "./canvas/wire.ts";
 import { ARCHIVE_URL, ROOM, hasArchive, relayUrl } from "./config.ts";
 import { follow as followPresence } from "./net/presence.ts";
 import { leaders } from "./net/leaders.ts";
+import { activity } from "./net/activity.ts";
 import { offerCard, shareCard } from "./ui/card.ts";
 import { loadOrCreate } from "./identity/store.ts";
 import { IdentityPanel } from "./ui/identity-panel.ts";
@@ -51,6 +52,9 @@ const provenance = need<HTMLElement>("#provenance");
 // next to: the presence follower starts during module setup, and a const declared below
 // its own use is a temporal dead zone waiting for the first callback to arrive early.
 const watching = need<HTMLElement>("#watching");
+const pulse = need<HTMLElement>("#pulse");
+const pulseBars = need<HTMLElement>("#pulse-bars");
+const pulsePeak = need<HTMLElement>("#pulse-peak");
 const shareButton = need<HTMLButtonElement>("#share");
 const board = need<HTMLElement>("#holding");
 const boardList = need<HTMLElement>("#holding-list");
@@ -568,8 +572,9 @@ async function placePixel(cx: number, cy: number): Promise<void> {
       `placed${how} at seq ${outcome.seq}, signed by ${panel.current.did.slice(0, 12)}…`,
       "ok",
     );
-    // The one moment the ranking reliably changes for the person looking at it.
+    // The one moment the ranking and the pulse reliably change for the person looking.
     void refreshBoard();
+    void refreshPulse();
     return;
   }
 
@@ -781,6 +786,7 @@ function startLoading(): void {
   });
 
   void refreshBoard();
+  void refreshPulse();
 
   provenance.textContent = "loading the archive…";
   void loadCanvas(ARCHIVE_URL)
@@ -891,6 +897,31 @@ const timelapse = new Timelapse({
  * looking is when they themselves paint, so that is when it is asked again. */
 const BOARD_ROWS = 5;
 
+/* The pulse follows the same rule, for the same reason: the buckets are six hours wide, so a
+ * poll would redraw identical bars all day. */
+async function refreshPulse(): Promise<void> {
+  const recent = await activity(ARCHIVE_URL);
+  // Hidden rather than flat. An empty axis is a claim that nothing happened, and not knowing
+  // is a different thing from knowing it was quiet.
+  pulse.hidden = recent === null;
+  if (recent === null) return;
+
+  const peak = Math.max(...recent.buckets);
+  pulsePeak.textContent = peak === 0 ? "quiet" : `${peak} in the busiest ${recent.bucketHours}h`;
+
+  pulseBars.replaceChildren();
+  recent.buckets.forEach((count, index) => {
+    const bar = document.createElement("div");
+    const newest = index === recent.buckets.length - 1;
+    bar.className = `pulse__bar${count === 0 ? " pulse__bar--none" : ""}${newest ? " pulse__bar--now" : ""}`;
+    // A zero bar is still drawn, at the height of a rule, so a quiet stretch reads as measured
+    // silence rather than as a hole in the chart.
+    bar.style.height = count === 0 ? "2px" : `${Math.max(3, Math.round((count / peak) * 44))}px`;
+    bar.title = `${count} placed`;
+    pulseBars.append(bar);
+  });
+}
+
 async function refreshBoard(): Promise<void> {
   const rows = (await leaders(ARCHIVE_URL)).slice(0, BOARD_ROWS);
   boardList.replaceChildren();
@@ -993,6 +1024,14 @@ shareButton.addEventListener("click", () => {
     .finally(() => {
       shareButton.disabled = false;
     });
+});
+
+need<HTMLButtonElement>("#verify-copy").addEventListener("click", () => {
+  const command = need<HTMLElement>("#verify-cmd").textContent ?? "";
+  void navigator.clipboard
+    .writeText(command)
+    .then(() => say("copied — run it against the room, nothing in that path is ours", "ok"))
+    .catch(() => say("the clipboard refused; select the command and copy it", "warn"));
 });
 
 replayButton.addEventListener("click", () => setReplaying(true));

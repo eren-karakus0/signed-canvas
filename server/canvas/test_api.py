@@ -9,6 +9,7 @@ comparison that can only say "about the same" is not worth making.
 
 from __future__ import annotations
 
+import datetime
 import json
 import random
 import tempfile
@@ -305,6 +306,78 @@ class Api(unittest.TestCase):
         painted = self.get("/snapshot")["painted"]
         held = sum(leader["held"] for leader in self.get("/leaders")["leaders"])
         self.assertLessEqual(held, painted)
+
+    def test_activity_buckets_place_each_row_in_its_own_window(self) -> None:
+        """Oldest bucket first, and a row lands in exactly one.
+
+        Built with rows at known ages rather than whatever the fixture happens to hold: a
+        bucketing bug that shifts everything by one window is invisible against random data
+        and obvious against three rows placed on purpose.
+        """
+        now = "2026-09-13 12:00:00"
+        rows = [
+            # (hours ago, how many) — chosen to sit mid-bucket so rounding cannot move them.
+            (3, 2),    # newest bucket  (0-6h)
+            (9, 1),    # one back       (6-12h)
+            (27, 3),   # four back      (24-30h)
+        ]
+        seq = 5000
+        batch = []
+        for hours, count in rows:
+            stamp = datetime.datetime(2026, 9, 13, 12, 0, 0) - datetime.timedelta(hours=hours)
+            for _ in range(count):
+                seq += 1
+                batch.append(
+                    {
+                        "seq": seq,
+                        "ts": stamp.strftime("%Y-%m-%dT%H:%M:%S.000000Z"),
+                        "from": DID_A,
+                        "text": f"px {seq % COLS},{seq % ROWS} 3 {seq:06x}",
+                        "nonce": seq,
+                    }
+                )
+        with Archive(self.path) as archive:
+            archive.apply_batch(batch)
+            counts = archive.activity(8, 6, now)
+
+        self.assertEqual(len(counts), 8)
+        # Oldest first, so the newest bucket is last.
+        self.assertEqual(counts[-1], 2, "3 hours ago belongs in the newest bucket")
+        self.assertEqual(counts[-2], 1, "9 hours ago belongs one bucket back")
+        self.assertEqual(counts[-5], 3, "27 hours ago belongs four buckets back")
+        self.assertEqual(sum(counts[:-5]) + counts[-3] + counts[-4], 0, "no other bucket holds rows")
+
+    def test_activity_ignores_rows_outside_the_window(self) -> None:
+        now = "2026-09-13 12:00:00"
+        old = datetime.datetime(2026, 9, 13, 12, 0, 0) - datetime.timedelta(hours=200)
+        with Archive(self.path) as archive:
+            archive.apply_batch(
+                [
+                    {
+                        "seq": 9001,
+                        "ts": old.strftime("%Y-%m-%dT%H:%M:%S.000000Z"),
+                        "from": DID_A,
+                        "text": "px 1,1 3 aaaaaa",
+                        "nonce": 9001,
+                    }
+                ]
+            )
+            counts = archive.activity(4, 6, now)
+        self.assertEqual(counts, [0, 0, 0, 0])
+
+    def test_activity_refuses_a_window_that_cannot_work(self) -> None:
+        with Archive(self.path) as archive:
+            for buckets, hours in ((0, 6), (-1, 6), (4, 0)):
+                with self.subTest(buckets=buckets, hours=hours):
+                    with self.assertRaises(ValueError):
+                        archive.activity(buckets, hours, "2026-09-13 12:00:00")
+
+    def test_activity_route_answers_with_the_configured_window(self) -> None:
+        body = self.get("/activity")
+        self.assertEqual(len(body["buckets"]), 56)
+        self.assertEqual(body["bucket_hours"], 6)
+        self.assertEqual(body["span_hours"], 336)
+        self.assertTrue(all(isinstance(n, int) and n >= 0 for n in body["buckets"]))
 
     def test_health_reports_lag(self) -> None:
         body = self.get("/health")

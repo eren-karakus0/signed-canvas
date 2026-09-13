@@ -36,6 +36,30 @@
         <strong>No token, nothing for sale</strong>, and not affiliated with Flop&nbsp;Labs.
       </p>
     </div>
+
+    <!-- The gap between the claim and the counters was 742px wide at 1920 and held nothing.
+         What belongs in a gap that shape is a timeline: the first question a visitor has is
+         "is anything happening here", and a total placed does not answer it. Hidden until it
+         has data rather than drawing an empty axis. -->
+    <div class="head__mid">
+      <div class="pulse" id="pulse" hidden>
+        <p class="pulse__head">
+          <span>activity · last 14 days</span>
+          <span id="pulse-peak"></span>
+        </p>
+        <div class="pulse__bars" id="pulse-bars" role="img" aria-label="Placements over the last fourteen days"></div>
+        <p class="pulse__scale" aria-hidden="true"><span>14d ago</span><span>7d</span><span>now</span></p>
+      </div>
+
+      <!-- The whole product is "do not trust us, check". The command that checks it lived
+           only in the README until now. -->
+      <p class="verify">
+        <span class="verify__label">check it yourself</span>
+        <code id="verify-cmd">python agents/verify.py</code>
+        <button type="button" class="link" id="verify-copy">copy</button>
+      </p>
+    </div>
+
     <div class="head__right">
       <p class="micro" id="provenance">sample data · not yet reading the room</p>
       <p class="head__stat"><span id="r-painted">—</span> <span>placed</span></p>
