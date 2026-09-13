@@ -980,6 +980,35 @@ the journal, which is worse than one that never starts. All five routes answered
 host, then through the tunnel and the Vercel proxy, then in the browser: **2 watching**, a
 HOLDING list of five, and the archive at seq 518 with lag 0.
 
+**T-30 · The canvas's pulse** — ✅ **DONE 2026-09-13**
+
+The header's middle was measured before anything was drawn in it: 742 px wide at 1920, 188 at
+1366, holding nothing. A gap that shape is a timeline, and the first question a visitor has —
+"is anything happening here" — is one a running total cannot answer.
+
+**Fourteen days at six-hour buckets, not two days.** Measured the same day: the last 48 hours
+held 4 placements and the 14 days before them held 507. A two-day window would have drawn a
+flat line under a canvas that had just had its busiest day ever, which is true and useless.
+The wider window says both things — it was busy, and it is quiet now. Empty buckets are drawn
+at the height of a rule rather than skipped: hiding the silence turns a counter into
+decoration.
+
+Bucketed by the archive (`/activity`), because the alternative is every visitor downloading
+the whole history to compute the same 56 numbers. `now` is a parameter rather than a clock
+read, which is what makes the query testable at all.
+
+*Removed below 1500 px rather than squeezed.* Keeping it there cost the header **74 px of
+height at 1366** — height the board was using — to render 56 bars into 154 px. Measured at
+four widths before and after; 1366 is back to its original 163 px header.
+
+*The mutation test ate its own subject.* Both bucket mutations (reversed order, off-by-one)
+were caught, and then `git checkout` to revert them deleted the uncommitted `activity()` with
+them. Nothing was lost but the time to retype it; the lesson is that reverting a mutation with
+version control only works on code version control has seen.
+
+The verify command moved out of the README onto the page. A product whose whole claim is "do
+not trust us, check" should not keep the checking instructions one click away.
+
 **T-21 · Where the interface answers** — ✅ **DONE 2026-09-02**
 *Done when:* `sagla.py` is clean and screenshots at 390 px wide are legible.
 *Depends on:* T-7.
