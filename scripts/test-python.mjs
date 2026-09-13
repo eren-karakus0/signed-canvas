@@ -14,7 +14,11 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const SUITES = ["server/canvas", "agents"];
+/* `unittest discover` does not recurse into a package without an __init__.py, and adding
+ * one to agents/tclk would make it importable as a package it is not. Naming the
+ * directory is cheaper than restructuring it, and a suite that is not listed here is a
+ * suite nobody runs — which is the failure this script exists to prevent. */
+const SUITES = ["server/canvas", "agents", "agents/tclk"];
 
 /* Probe for what the tests actually need, not for "a Python 3".
  *
