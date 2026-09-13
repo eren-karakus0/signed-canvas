@@ -130,10 +130,22 @@ Basis: five frames the payer emits, plus one job-note write, plus headroom for o
 technocore.chat's limit is 300 writes/minute per client IP, so one deal must never be able to
 consume a meaningful share of it.
 
-**NFR-4 · Region answer latency.** `/region` responds in under **200 ms at p95** for a region
-of up to 2,304 cells (a quarter of the canvas), measured on the deployed archive over 100
-requests. Basis: `/leaders` and `/activity` already run comparable aggregate queries against
-the same 515-row table well inside this.
+**NFR-4 · Region answer latency.** ~~Under 200 ms at p95 end to end.~~ **Corrected
+2026-09-13 after measuring; the original target was unreachable by any endpoint on this
+architecture, including ones that do no work.**
+
+The query itself: **under 10 ms at p95** for a region of up to 2,304 cells, measured on the
+archive host over 100 requests. *Measured: p50 1.9 ms, p95 2.6 ms.*
+
+End to end from a client: **not a property of this endpoint and not targeted here.** The same
+100-request measurement through Vercel and the Cloudflare tunnel gives p95 496 ms — but so
+does `/health`, at p95 464 ms, and `/leaders` at 441 ms. About 335 ms is path cost shared by
+every route, and `/region` at its largest size sits inside the noise of an endpoint that
+returns a fixed JSON object.
+
+*Why the original number was wrong:* it was written as if the archive were the only cost, and
+it named no vantage point. A latency target has to say where it is measured from, or it
+measures the tester's distance from the server.
 
 **NFR-5 · No new client weight.** The browser bundle grows by **0 bytes** for this work. Basis:
 this is agent-side and archive-side; any interface for it is a later, separately budgeted

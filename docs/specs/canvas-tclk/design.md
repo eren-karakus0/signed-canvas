@@ -182,7 +182,7 @@ a delivered region (A-7 — settled by answering at a sequence number, never at 
 | NFR-1 | vendored schema as a test fixture | every emittable frame validated in tests |
 | NFR-2 | verify-before-apply in `deal.py` | test feeds a frame with a broken signature |
 | NFR-3 | one write per frame, one for the note | counted in the deal record |
-| NFR-4 | bounded region query | 100 requests against the deployed archive |
+| NFR-4 | bounded region query | 100 on the host: p95 2.6 ms. End to end is path cost — `/health` measures the same |
 | NFR-5 | nothing imported by `src/` | `npm run check` bundle line |
 | NFR-6 | next action computed from the file | kill at each of five positions, resume |
 | NFR-7 | the sentence in the job note and the report | read in review |

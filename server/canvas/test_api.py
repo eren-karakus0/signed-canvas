@@ -430,6 +430,88 @@ class Api(unittest.TestCase):
         self.assertEqual(stored, 1, "both copies of one message were stored")
         self.assertEqual(len(history), 1)
 
+    def test_region_agrees_with_cell_for_every_cell_in_it(self) -> None:
+        """The property FR-8 demands: the endpoint is a convenience, not a new authority.
+
+        Checked cell by cell rather than spot-checked. A region query that agreed with /cell
+        on the corners and disagreed in the middle would pass a sample and fail a stranger.
+        """
+        # 24x24 rather than the 48x48 cap: this walks /cell once per cell, and 2304 round
+        # trips added forty seconds to the suite to tell us what 576 already do.
+        side = 24
+        # A contested cell, on purpose. Without one, every cell in the rectangle has a single
+        # placement, MAX(seq) and MIN(seq) agree, and a query returning the *oldest* owner of
+        # each cell passes — which is precisely the bug this endpoint must not have. Found by
+        # mutating MAX to MIN and watching the suite stay green.
+        with Archive(self.path) as archive:
+            archive.apply_batch(
+                [
+                    _message(9600, 3, 3, 5, DID_A),
+                    _message(9601, 3, 3, 9, DID_B),
+                    _message(9602, 3, 3, 2, DID_A),
+                ]
+            )
+
+        region = self.get(f"/region?x=0&y=0&w={side}&h={side}")
+        contested = next(c for c in region["cells"] if (c["cx"], c["cy"]) == (3, 3))
+        self.assertEqual(
+            (contested["seq"], contested["step"]),
+            (9602, 2),
+            "a contested cell must report its newest placement, not its first",
+        )
+        self.assertEqual(region["derivable_from"], "/cell/<x>/<y>")
+        by_cell = {(c["cx"], c["cy"]): c for c in region["cells"]}
+        self.assertGreater(len(by_cell), 0, "the fixture should paint inside this rectangle")
+
+        for cy in range(side):
+            for cx in range(side):
+                history = self.get(f"/cell/{cx}/{cy}")["placements"]
+                newest = history[-1] if history else None
+                claimed = by_cell.get((cx, cy))
+                if newest is None:
+                    self.assertIsNone(claimed, f"region invented a cell at {cx},{cy}")
+                    continue
+                self.assertIsNotNone(claimed, f"region omitted {cx},{cy}")
+                for field in ("step", "did", "seq", "witnessed"):
+                    self.assertEqual(
+                        claimed[field], newest[field], f"{field} differs at {cx},{cy}"
+                    )
+
+    def test_region_answers_as_of_a_sequence_not_as_of_now(self) -> None:
+        """A-7's answer: a delivered region must stay checkable after someone paints over it."""
+        with Archive(self.path) as archive:
+            row = next(r for r in archive.cells())
+            before_seq = row.seq
+            archive.apply_batch(
+                [_message(9500, row.cx, row.cy, (row.step % 15) + 1, DID_B)]
+            )
+
+        now = self.get(f"/region?x={row.cx}&y={row.cy}&w=1&h=1")
+        self.assertEqual(now["cells"][0]["did"], DID_B, "the overpaint should be current")
+
+        earlier = self.get(f"/region?x={row.cx}&y={row.cy}&w=1&h=1&at={before_seq}")
+        self.assertEqual(earlier["cells"][0]["seq"], before_seq)
+        self.assertEqual(earlier["cells"][0]["did"], row.did, "history moved under us")
+
+    def test_region_refuses_what_it_cannot_answer_quickly(self) -> None:
+        for path in (
+            "/region?x=0&y=0&w=145&h=1",      # off the canvas
+            "/region?x=0&y=0&w=144&h=64",     # 9216 cells, four times the cap
+            "/region?x=0&y=0&w=0&h=4",        # empty
+            "/region?x=0&y=0&w=4",            # h missing
+            "/region?x=-1&y=0&w=4&h=4",       # not a non-negative integer
+            "/region?x=0&y=0&w=abc&h=4",
+        ):
+            with self.subTest(path=path):
+                with self.assertRaises(urllib.error.HTTPError) as caught:
+                    self.get(path)
+                self.assertEqual(caught.exception.code, 400)
+
+    def test_region_at_the_cap_is_answered(self) -> None:
+        # 2304 cells: the largest the latency target was measured at, so it must work.
+        body = self.get("/region?x=0&y=0&w=48&h=48")
+        self.assertEqual((body["w"], body["h"]), (48, 48))
+
     def test_health_reports_lag(self) -> None:
         body = self.get("/health")
         self.assertEqual(body["room"], ROOM)

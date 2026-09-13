@@ -9,6 +9,7 @@ front and opened no port, so anything reachable from outside arrives through clo
     GET  /presence/<id>   record that a viewer is here; answer how many are
     GET  /leaders         the keys holding the most cells
     GET  /activity        placements per bucket over the recent past
+    GET  /region          what a rectangle holds, as of a sequence  (proof of delivery)
     POST /relay           forward one already-signed placement to technocore.chat
     POST /witness         attach a signature to an archived placement (FR-7)
     GET  /health          what the archive holds, including ingest lag
@@ -95,6 +96,8 @@ LEADER_LIMIT = 10
 ACTIVITY_BUCKETS = 56
 ACTIVITY_BUCKET_HOURS = 6
 
+_DIGITS = re.compile(r"^\d{1,9}$")
+
 log = logging.getLogger("canvas.app")
 
 
@@ -174,6 +177,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._leaders()
             if path == "/activity":
                 return self._activity()
+            if path == "/region":
+                return self._region()
         except ArchiveError as exc:
             return self._fail(409, str(exc))
         except Exception:
@@ -490,6 +495,66 @@ class Handler(BaseHTTPRequestHandler):
                 "buckets": counts,
                 "bucket_hours": ACTIVITY_BUCKET_HOURS,
                 "span_hours": ACTIVITY_BUCKETS * ACTIVITY_BUCKET_HOURS,
+            },
+        )
+
+    def _region(self) -> None:
+        """What a rectangle of the canvas holds, as of a sequence number.
+
+        This is what a deal settles against: "cells (20,10) to (39,29) hold this picture,
+        placed by this key, as of seq N" is a claim a stranger can check. `at` is a sequence
+        rather than a time because the canvas is world-writable — someone can paint over a
+        delivered region, and a question answered about "now" has a different answer every
+        minute.
+
+        **It adds no authority.** Every row here is already at `/cell/<x>/<y>`, one cell at a
+        time, with the payload and signature to re-verify it. `derivable_from` says so in the
+        answer, because a proof endpoint that becomes a source of truth has quietly replaced
+        the thing it was proving.
+        """
+        query = urllib.parse.parse_qs(self.path.partition("?")[2])
+
+        def number(name: str, fallback: int | None = None) -> int | None:
+            raw = query.get(name, [None])[0]
+            if raw is None:
+                return fallback
+            if not _DIGITS.match(raw):
+                raise ValueError(f"{name} must be a non-negative integer")
+            return int(raw)
+
+        try:
+            x, y = number("x", 0), number("y", 0)
+            w, h = number("w"), number("h")
+            at = number("at")
+            if w is None or h is None:
+                raise ValueError("w and h are required")
+            with self._open() as archive:
+                rows = archive.region(x, y, w, h, at)
+                seq = archive.last_seq
+        except ValueError as exc:
+            return self._fail(400, str(exc))
+
+        self._send(
+            200,
+            {
+                "x": x,
+                "y": y,
+                "w": w,
+                "h": h,
+                "at": at if at is not None else seq,
+                "archive_seq": seq,
+                "derivable_from": "/cell/<x>/<y>",
+                "cells": [
+                    {
+                        "cx": row.cx,
+                        "cy": row.cy,
+                        "step": row.step,
+                        "did": row.did,
+                        "seq": row.seq,
+                        "witnessed": row.witnessed,
+                    }
+                    for row in rows
+                ],
             },
         )
 

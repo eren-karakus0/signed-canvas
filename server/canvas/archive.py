@@ -45,7 +45,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Iterator
 
-from placement import is_signed_sender, parse as parse_placement
+from placement import COLS, ROWS, is_signed_sender, parse as parse_placement
 from verifier import VerifierError, message_payload, verify_payload
 
 log = logging.getLogger(__name__)
@@ -96,6 +96,12 @@ CREATE TABLE IF NOT EXISTS pending_signature (
     seen_at REAL NOT NULL
 );
 """
+
+
+#: The largest region answered in one call: a quarter of the canvas. The cap exists because
+#: NFR-4's latency target was measured at this size, and an unbounded region is an unbounded
+#: query dressed as a convenience.
+REGION_MAX_CELLS = 2304
 
 
 class ArchiveError(Exception):
@@ -518,6 +524,42 @@ class Archive:
             "WHERE cx = ? AND cy = ? ORDER BY seq"
         )
         return [Row(**dict(row)) for row in self._db.execute(query, (cx, cy))]
+
+    def region(self, x: int, y: int, w: int, h: int, at: int | None = None) -> list[Row]:
+        """The newest placement in each occupied cell of a rectangle, as of `at`.
+
+        `at` is a sequence number, not a time, and that is the point. The canvas is
+        world-writable: between a deliverable being painted and somebody checking it, a third
+        party can paint over it. A deal that settled on "now" would be settleable differently
+        by two readers a minute apart. A sequence number makes the same question have one
+        answer forever.
+
+        Ordered by cell so two callers building a proof from this get byte-identical lists.
+
+        :raises ValueError: if the rectangle is off the canvas or larger than REGION_MAX_CELLS.
+        """
+        if w <= 0 or h <= 0:
+            raise ValueError("a region needs a positive width and height")
+        if w * h > REGION_MAX_CELLS:
+            raise ValueError(
+                f"{w}x{h} is {w * h} cells; the limit is {REGION_MAX_CELLS}, because the "
+                "latency this is measured against was measured at that size"
+            )
+        if x < 0 or y < 0 or x + w > COLS or y + h > ROWS:
+            raise ValueError(f"{w}x{h} at {x},{y} is outside a {COLS}x{ROWS} canvas")
+
+        ceiling = self.last_seq if at is None else at
+        bounds = (x, x + w - 1, y, y + h - 1, ceiling)
+        query = (
+            "SELECT seq, ts, did, nonce, text, cx, cy, step, sig FROM placement "
+            "WHERE cx BETWEEN ? AND ? AND cy BETWEEN ? AND ? AND seq <= ? "
+            "AND seq IN ("
+            "  SELECT MAX(seq) FROM placement "
+            "  WHERE cx BETWEEN ? AND ? AND cy BETWEEN ? AND ? AND seq <= ? "
+            "  GROUP BY cy, cx"
+            ") ORDER BY cy, cx"
+        )
+        return [Row(**dict(row)) for row in self._db.execute(query, bounds + bounds)]
 
     def activity(self, buckets: int, bucket_hours: int, now: str) -> list[int]:
         """How many placements landed in each of the last `buckets` windows, oldest first.
