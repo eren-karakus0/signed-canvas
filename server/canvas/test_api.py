@@ -379,6 +379,57 @@ class Api(unittest.TestCase):
         self.assertEqual(body["span_hours"], 336)
         self.assertTrue(all(isinstance(n, int) and n >= 0 for n in body["buckets"]))
 
+    def test_a_replayed_placement_cannot_repaint_a_cell(self) -> None:
+        """The attack technocore.chat documents, run against this archive.
+
+        A signed URL stops being single-use once newer traffic pushes it past the 1 MiB tail
+        the service scans for the last nonce, and `sig` is served to every reader of the room.
+        So anyone following the room can capture a placement and fire it again later. The
+        service assigns the replay a *new* seq, which is why deduplicating on seq alone does
+        not stop it.
+
+        Concretely: A paints a cell, B paints over it, someone replays A's original message.
+        Without a guard the cell goes back to A's colour, attributed to A, who did nothing.
+        """
+        original = _message(7001, 40, 40, 5, DID_A)
+        overwrite = _message(7002, 40, 40, 9, DID_B)
+        # Same did, same nonce, same text — a byte-identical replay at a later seq.
+        replay = dict(original)
+        replay["seq"] = 7003
+
+        with Archive(self.path) as archive:
+            archive.apply_batch([original, overwrite])
+            before = {(row.cx, row.cy): (row.did, row.step) for row in archive.cells()}
+            self.assertEqual(before[(40, 40)], (DID_B, 9), "B should hold the cell")
+
+            archive.apply_batch([replay])
+            after = {(row.cx, row.cy): (row.did, row.step) for row in archive.cells()}
+
+        self.assertEqual(
+            after[(40, 40)],
+            (DID_B, 9),
+            "a replayed message took the cell back from its current owner",
+        )
+
+    def test_two_copies_in_one_batch_do_not_break_ingest(self) -> None:
+        """A replay that arrives in the same poll as its original.
+
+        The guard asks the database, and within a single batch the first copy has not been
+        written yet — so both would pass it and the unique index would reject the whole
+        transaction, stopping ingest rather than the attacker. One poll returns up to 200
+        messages, so putting both copies in one is a matter of sending them a second apart.
+        """
+        original = _message(7201, 42, 42, 5, DID_A)
+        replay = dict(original)
+        replay["seq"] = 7202
+
+        with Archive(self.path) as archive:
+            stored, _ = archive.apply_batch([original, replay])
+            history = archive.history(42, 42)
+
+        self.assertEqual(stored, 1, "both copies of one message were stored")
+        self.assertEqual(len(history), 1)
+
     def test_health_reports_lag(self) -> None:
         body = self.get("/health")
         self.assertEqual(body["room"], ROOM)

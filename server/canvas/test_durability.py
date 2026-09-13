@@ -188,6 +188,48 @@ class Witnessing(unittest.TestCase):
             .rstrip("=")
         )
 
+    def test_the_same_message_re_read_still_backfills_its_signature(self) -> None:
+        """The replay guard must not break the backfill it sits beside.
+
+        Re-reading the room delivers the same message at the *same* seq, and that is how a row
+        archived before the service published signatures gains one. A guard keyed on
+        (did, nonce) alone would mistake that for a replay and the hole would never fill.
+        """
+        with Archive(self.path) as archive:
+            archive.room = ROOM
+            message = _message(1, self.did, 5, 5, 7, 901)
+            archive.apply_batch([message])
+            self.assertFalse(next(iter(archive.cells())).witnessed)
+
+            signed = dict(message)
+            signed["sig"] = self._sign(f"{ROOM}|901|{message['text']}")
+            archive.apply_batch([signed])
+            row = next(iter(archive.cells()))
+
+        self.assertTrue(row.witnessed, "the same seq re-read must still fill in the signature")
+
+    def test_a_replay_at_a_new_seq_is_refused_even_when_signed(self) -> None:
+        """A valid signature is not a defence here: the replay carries the original's.
+
+        The signature proves who wrote the words, which was never in doubt. What it cannot
+        say is that the author meant to write them twice.
+        """
+        with Archive(self.path) as archive:
+            archive.room = ROOM
+            first = _message(1, self.did, 6, 6, 7, 902)
+            first["sig"] = self._sign(f"{ROOM}|902|{first['text']}")
+            archive.apply_batch([first])
+
+            replay = dict(first)
+            replay["seq"] = 2
+            archive.apply_batch([replay])
+
+            rows = [row for row in archive.cells() if (row.cx, row.cy) == (6, 6)]
+            history = archive.history(6, 6)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(len(history), 1, "the replay was archived as a second placement")
+
     def test_a_correct_signature_is_attached(self) -> None:
         with Archive(self.path) as archive:
             archive.room = ROOM

@@ -68,6 +68,15 @@ CREATE TABLE IF NOT EXISTS placement (
 CREATE INDEX IF NOT EXISTS placement_cell ON placement (cy, cx, seq);
 CREATE INDEX IF NOT EXISTS placement_did  ON placement (did);
 
+/* One placement per (did, nonce). technocore.chat requires a key's nonce to increase within
+   a room, so a legitimate writer never reuses one; a repeat is a replayed message, not a
+   second pixel. Partial, because records archived before the service published a nonce carry
+   the empty string and would otherwise all collide with each other. A unique index rather
+   than only the check in `apply_batch`: a logic slip there should fail loudly instead of
+   quietly letting a cell be repainted by someone who did not write it. */
+CREATE UNIQUE INDEX IF NOT EXISTS placement_once
+    ON placement (did, nonce) WHERE nonce != '';
+
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -192,6 +201,19 @@ class Archive:
 
     # ---------------------------------------------------------------- writes
 
+    def _is_replay(self, did: str, nonce: str, seq: int) -> bool:
+        """True if this (did, nonce) is already archived under a different sequence.
+
+        An empty nonce is never a replay: those are the pre-0.11.0 records, which carry no
+        nonce at all, and treating them as equal would drop every one after the first.
+        """
+        if not nonce:
+            return False
+        row = self._db.execute(
+            "SELECT seq FROM placement WHERE did = ? AND nonce = ?", (did, nonce)
+        ).fetchone()
+        return row is not None and row["seq"] != seq
+
     def apply_batch(
         self, messages: Iterable[dict], room_last_seq: int | None = None
     ) -> tuple[int, int]:
@@ -204,6 +226,14 @@ class Archive:
 
         Non-placements advance the cursor without being stored: the room is world-writable
         and most of its traffic is not ours.
+
+        A placement whose (did, nonce) is already archived under a *different* seq is a replay
+        and is dropped. technocore.chat documents why this is reachable: a captured signed URL
+        stops being single-use once newer traffic pushes it past the 1 MiB tail scanned for
+        the last nonce, and `sig` is served to every reader of the room. The service assigns
+        the replay a new seq, so deduplicating on seq alone does not see it. The same seq
+        arriving twice is not a replay — that is a re-read, and it is how a row archived
+        before signatures were published gains one.
 
         A message carrying ``sig`` is witnessed here if — and only if — that signature
         verifies against the payload rebuilt from the message's own room, nonce and swept
@@ -220,6 +250,11 @@ class Archive:
         stored = 0
         highest = self.last_seq
         rows: list[tuple] = []
+        # The guard below asks the database, and nothing in this batch is written until the
+        # end of it — so a replay arriving in the same poll as its original would pass the
+        # check twice and the unique index would reject the whole transaction, stopping
+        # ingest rather than the attacker. One poll returns up to 200 messages.
+        in_batch: set[tuple[str, str]] = set()
 
         for message in messages:
             try:
@@ -239,6 +274,15 @@ class Archive:
             placement = parse_placement(text)
             if placement is None:
                 continue
+            if self._is_replay(sender, nonce, seq) or (nonce and (sender, nonce) in in_batch):
+                # Logged, not silent: a burst of these is someone replaying the room at us,
+                # and that is worth being able to see in the journal.
+                log.warning(
+                    "seq %d replays %s nonce %s — dropped", seq, sender[:20], nonce
+                )
+                continue
+            if nonce:
+                in_batch.add((sender, nonce))
             rows.append(
                 (
                     seq,
