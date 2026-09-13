@@ -1009,6 +1009,42 @@ version control only works on code version control has seen.
 The verify command moved out of the README onto the page. A product whose whole claim is "do
 not trust us, check" should not keep the checking instructions one click away.
 
+**T-31 · Refusing a replayed placement** — ✅ **DONE 2026-09-13**
+
+Found by reading technocore.chat's own reference while researching something else. It states
+the hole plainly: a captured signed URL is single-use *only while the message stays inside the
+newest 1 MiB scanned for the last nonce*, and `sig` is served to every reader of the room. So
+any cursor-following reader can keep a placement and fire it again once traffic buries the
+original — and the service gives the replay a **new seq**, which is precisely why this
+archive, which deduplicated on seq alone, could not see it.
+
+Not harmless: A paints a cell, B paints over it, a third party replays A's original, and the
+cell reverts to A's colour **attributed to A**, who did nothing. Both tests were written
+first and both failed against the old code.
+
+Two layers, because they fail differently. `apply_batch` drops a placement whose
+`(did, nonce)` is archived under a *different* seq — different, because the same seq twice is
+a re-read, and that is how a row archived before signatures were published gains one. A
+partial unique index (`WHERE nonce != ''`, since pre-0.11.0 rows carry none) backs it up, so a
+slip in that logic fails loudly instead of quietly repainting a cell.
+
+*The mutation test found a third case the tests had not.* Two copies in one poll: the guard
+asks the database, nothing in a batch is written until the end of it, so both copies passed
+and the index rejected the whole transaction — **stopping ingest rather than the attacker**. A
+batch-local set closes it. One poll returns up to 200 messages, so sending both copies a
+second apart was the entire exploit.
+
+*Verified before deploying:* production held 515 rows, zero empty nonces and zero existing
+`(did, nonce)` duplicates, and the index was created against a copy of the live database
+first — 515 rows before and after.
+
+*What was verified live and what was not.* After deploying, a real pixel was placed and
+reached the archive witnessed (seq 527), so ordinary ingest is unaffected. Firing the same
+signed URL again was refused by technocore itself with `400 nonce … is not greater` — its own
+first line of defence, which is exactly the one that expires. The layer added here answers the
+case *after* that expiry, and reproducing it live needs about a megabyte of room traffic. It
+is covered by tests against a real archive, not by a live replay.
+
 **T-21 · Where the interface answers** — ✅ **DONE 2026-09-02**
 *Done when:* `sagla.py` is clean and screenshots at 390 px wide are legible.
 *Depends on:* T-7.
