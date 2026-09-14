@@ -301,6 +301,19 @@ def build_reveal(*, sender: str, contract: str, secret: str) -> dict[str, Any]:
     }
 
 
+def build_refund(
+    *, sender: str, contract: str, reason: str | None = None, ref: str | None = None
+) -> dict[str, Any]:
+    """A `refund` frame: the payer takes its escrow back after the deadline passed."""
+    return {
+        "type": "refund",
+        "from": _valid_did(sender),
+        "contract": _checked(contract, _HEX32, "contract", "0x + 64 lowercase hex"),
+        "reason": _nonempty(reason, "reason") if reason is not None else None,
+        "ref": _nonempty(ref, "ref") if ref is not None else None,
+    }
+
+
 def build_receipt(
     *,
     sender: str,

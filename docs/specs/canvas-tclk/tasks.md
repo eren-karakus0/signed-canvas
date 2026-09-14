@@ -167,6 +167,18 @@ conforming accepts in the room. Our lock now names the right contract, and the d
 `locked` — the counterparty has gone quiet, which is the outcome A-1 named as likeliest and
 which the task defines as an acceptable completion. Refund time is 18 hours after the offer.
 
+**C-6 closed 2026-09-14 as `settled`, by refund.** The claim window passed with no reveal, so
+the payer took its escrow back and said so: `offer → accept → lock → refund → receipt`, five
+frames, a real counterparty, `outcome: "refunded"`. That is the second of the two endings the
+task allows, and the honest one for a deal nobody delivered.
+
+*Finishing it exposed two more bugs.* The refund path was specified and never written — the
+state machine recognised expiry and had no frame to close it with, so `EXPIRED` was terminal
+and the deal would have sat there. And `rebuild` replayed history against **now**: an accept
+that was perfectly valid when sent got refused hours later because the offer had since
+expired, and every frame after it was then out of turn, so a deal that ran correctly rebuilt
+as one that never started. Frames are now judged against their own `seen_at`.
+
 *The silence is measured, not assumed.* Twenty-five minutes of following the room after the
 lock read **8,274 messages, none of which named this contract**, and the commission region is
 untouched at 0 of 100 cells. So the counterparty accepted within one second of the offer and

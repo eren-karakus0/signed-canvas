@@ -23,6 +23,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import deal as deal_module
+import frames
 import job
 from record import DealRecord, RecordError
 
@@ -99,7 +100,15 @@ def render(record: DealRecord, delivery: dict[str, Any] | None) -> str:
         lines.append(f"**{entry['label']}** — {entry['room']} seq {entry['seq']}")
         lines.append("")
         lines.append("```json")
-        lines.append(json.dumps(entry["frame"], sort_keys=True, separators=(",", ":")))
+        # Through `strip_unset`, because that is what went on the wire. The record keeps the
+        # frame as it was built, unset fields included, and printing those under a heading
+        # that says "byte for byte as signed" would show a reader a field the signature
+        # never covered.
+        lines.append(
+            json.dumps(
+                frames.strip_unset(entry["frame"]), sort_keys=True, separators=(",", ":")
+            )
+        )
         lines.append("```")
         lines.append("")
 

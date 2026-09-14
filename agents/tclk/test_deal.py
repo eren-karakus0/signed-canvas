@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -27,7 +28,11 @@ PAYEE = "did:key:z6MkkMUtyaoMQ1qNiBc84kxgY76LnDbmJ8vEo5RFbvVbEpJ6"
 STRANGER = "did:key:z6MkkrPU26RGhFiinsF97bKYawQ3xTPZ9nGh4ZLpXaJ1kQm2"
 
 HOUR_MS = 3_600_000
-NOW_MS = 1_789_300_000_000
+#: Real time, not a fixed constant. The state machine judges each frame against the clock it
+#: arrived under, and a record written now carries a real `seen_at` — a synthetic epoch would
+#: put the fixture's frames hours away from their own observation times and expire the offer
+#: underneath them.
+NOW_MS = int(time.time() * 1000)
 
 
 def an_offer() -> dict:
@@ -76,8 +81,17 @@ def entries_through(position: str) -> tuple[list[dict], str, str]:
     ]
     labels = [label for label, _, _ in built]
     stop = labels.index(position) + 1
+    # `seen_at` as a real record carries it: seconds, near now, a little apart so the order
+    # the frames were observed in is the order they are replayed in.
     entries = [
-        {"label": label, "room": "p-test", "seq": i + 1, "from": sender, "frame": frame}
+        {
+            "label": label,
+            "room": "p-test",
+            "seq": i + 1,
+            "from": sender,
+            "frame": frame,
+            "seen_at": NOW_MS / 1000 + i,
+        }
         for i, (label, sender, frame) in enumerate(built[:stop])
     ]
     return entries, secret, statement
@@ -349,6 +363,79 @@ class Resuming(unittest.TestCase):
             self.assertEqual(rebuilt.state, State.SETTLED)
             with self.assertRaises(DealError):
                 deal_module.next_frame(rebuilt, PAYER)
+
+
+class Refunding(unittest.TestCase):
+    """The way out when nobody delivers, which is the common ending in this room.
+
+    Measured on the live deal this code opened: the counterparty accepted one second after the
+    offer landed and never revealed. Expiry is not an error path here; it is the path.
+    """
+
+    def _expired(self, position: str):
+        entries, _, _ = entries_through(position)
+        late = NOW_MS + 19 * HOUR_MS
+        return deal_module.rebuild(entries, late), late
+
+    def test_an_expired_deal_with_escrow_owes_the_payer_a_refund(self) -> None:
+        deal, late = self._expired("lock")
+        self.assertEqual(deal.state, State.EXPIRED)
+        self.assertEqual(deal.owes(PAYER), "refund")
+        self.assertIsNone(deal.owes(PAYEE), "the payee owes nothing after expiry")
+
+    def test_an_expired_offer_nobody_locked_owes_nothing(self) -> None:
+        # There is no escrow to take back — only an offer nobody took. A refund frame here
+        # would name money that never moved.
+        deal, _ = self._expired("offer")
+        self.assertEqual(deal.state, State.EXPIRED)
+        self.assertIsNone(deal.owes(PAYER))
+
+    def test_a_refund_with_no_escrow_behind_it_is_refused(self) -> None:
+        # `owes` already declines to ask for one; this is the other half, because a frame can
+        # arrive without this side having asked for it. A refund on an offer nobody locked
+        # would name money that never moved.
+        deal, late = self._expired("accept")
+        frame = frames.build_refund(sender=PAYER, contract=deal.contract, reason="lapsed")
+        result = deal_module.apply(deal, frame, PAYER, late)
+        self.assertFalse(result.ok)
+        self.assertIn("nothing was locked", result.reason)
+
+    def test_only_the_payer_can_refund(self) -> None:
+        deal, late = self._expired("lock")
+        frame = frames.build_refund(sender=PAYEE, contract=deal.contract, reason="mine now")
+        result = deal_module.apply(deal, frame, PAYEE, late)
+        self.assertFalse(result.ok)
+        self.assertIn("only the payer", result.reason)
+
+    def test_a_refund_before_its_time_is_refused(self) -> None:
+        entries, _, _ = entries_through("lock")
+        deal = deal_module.rebuild(entries, NOW_MS)
+        frame = frames.build_refund(sender=PAYER, contract=deal.contract, reason="early")
+        result = deal_module.apply(deal, frame, PAYER, NOW_MS)
+        self.assertFalse(result.ok)
+        self.assertIn("has not arrived", result.reason)
+
+    def test_the_receipt_after_a_refund_says_refunded_not_claimed(self) -> None:
+        """The most misleading line this code could write, locked out by a test."""
+        deal, late = self._expired("lock")
+        refund = deal_module.next_frame(deal, PAYER)
+        self.assertEqual(refund["type"], "refund")
+
+        after = deal_module._advance(deal, refund, PAYER, State.REFUNDED)
+        receipt = deal_module.next_frame(after, PAYER, rail="paper")
+        self.assertEqual(receipt["type"], "receipt")
+        self.assertEqual(receipt["outcome"], "refunded")
+
+    def test_a_refunded_deal_is_not_pushed_back_into_expiry_by_the_clock(self) -> None:
+        # Re-marking a closed deal expired would ask for the refund a second time.
+        entries, _, _ = entries_through("lock")
+        late = NOW_MS + 19 * HOUR_MS
+        deal = deal_module.rebuild(entries, late)
+        refund = deal_module.next_frame(deal, PAYER)
+        entries.append(
+            {"label": "refund", "room": "p-test", "seq": 90, "from": PAYER, "frame": refund}
+        )
+        self.assertEqual(deal_module.rebuild(entries, late + HOUR_MS).state, State.REFUNDED)
 
 
 class Records(unittest.TestCase):

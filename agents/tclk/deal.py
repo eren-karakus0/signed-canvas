@@ -38,9 +38,13 @@ class State(str, Enum):
     SETTLED = "settled"
     CANCELLED = "cancelled"
     EXPIRED = "expired"
+    REFUNDED = "refunded"
 
 
-TERMINAL = frozenset({State.SETTLED, State.CANCELLED, State.EXPIRED})
+#: Where a deal stops. `EXPIRED` is deliberately not here: a deal whose deadlines lapsed with
+#: money locked still owes its payer a way out, and treating expiry as the end would leave the
+#: escrow named in the transcript with nothing said about it afterwards.
+TERMINAL = frozenset({State.SETTLED, State.CANCELLED})
 
 #: Which side owes the next frame in each live state. The payer opens, locks and receipts;
 #: the payee accepts and reveals.
@@ -49,6 +53,9 @@ OWED: dict[State, tuple[str, str]] = {
     State.ACCEPTED: ("payer", "lock"),
     State.LOCKED: ("payee", "reveal"),
     State.REVEALED: ("payer", "receipt"),
+    # After the deadlines lapse the payer takes its escrow back and says so.
+    State.EXPIRED: ("payer", "refund"),
+    State.REFUNDED: ("payer", "receipt"),
 }
 
 
@@ -72,6 +79,9 @@ class Deal:
     offer: dict[str, Any]
     statement: str = ""
     secret: str = ""
+    #: Whether a lock was ever recorded. Expiry means something different with escrow behind
+    #: it than without, and the state alone cannot say which.
+    locked: bool = False
 
     def owes(self, me: str) -> str | None:
         """The frame `me` owes now, or None if it is somebody else's turn or the deal is over.
@@ -86,6 +96,11 @@ class Deal:
         compared against a DID nobody has chosen yet.
         """
         if self.state in TERMINAL:
+            return None
+        # An offer that expired without anybody locking has nothing to refund: there is no
+        # escrow, only an offer nobody took, and emitting a refund for it would name money
+        # that never moved.
+        if self.state is State.EXPIRED and not self.locked:
             return None
         side, frame = OWED[self.state]
         mine = self.payer if side == "payer" else self.payee
@@ -137,7 +152,15 @@ def rebuild(entries: list[dict[str, Any]], now_ms: int) -> Deal:
     )
 
     for entry in entries[1:]:
-        result = apply(deal, entry.get("frame", {}), entry.get("from", ""), now_ms)
+        # Each frame is judged against the clock it arrived under, not against now. Replaying
+        # history at the current time refuses an accept that was perfectly good when it was
+        # sent — the offer has since expired — and then every later frame is out of turn, so
+        # a deal that ran correctly rebuilds hours later as one that never started. `seen_at`
+        # is the record's own observation time; without it the frame keeps today's clock,
+        # which is right for a frame arriving now.
+        seen = entry.get("seen_at")
+        at_ms = int(seen * 1000) if isinstance(seen, (int, float)) and seen else now_ms
+        result = apply(deal, entry.get("frame", {}), entry.get("from", ""), at_ms)
         if result.ok:
             deal = _advance(
                 deal, entry.get("frame", {}), entry.get("from", ""), result.state
@@ -145,7 +168,16 @@ def rebuild(entries: list[dict[str, Any]], now_ms: int) -> Deal:
 
     # The clock has the last word: a live deal whose refund time has passed is expired,
     # whatever the frames say, because the counterparty's obligations have lapsed.
-    if deal.state not in TERMINAL and now_ms >= int(offer.get("refundAfterMs", 0)):
+    # The clock has the last word, but only over states the clock can still change. A deal
+    # already refunded or settled has passed the deadline's jurisdiction; re-marking it
+    # expired would erase the close and ask for the refund a second time.
+    lapsed = now_ms >= int(offer.get("refundAfterMs", 0))
+    if lapsed and deal.state in (
+        State.OPENED,
+        State.ACCEPTED,
+        State.LOCKED,
+        State.REVEALED,
+    ):
         deal = Deal(**{**deal.__dict__, "state": State.EXPIRED})
     return deal
 
@@ -176,6 +208,21 @@ def apply(deal: Deal, frame: dict[str, Any], sender: str, now_ms: int) -> Applie
 
     if kind == "heartbeat":
         return Applied(deal.state, False, "heartbeat is liveness, not a move")
+
+    if kind == "refund":
+        # Not a turn in the sequence but the exit from it, so it is judged on the clock and
+        # the escrow rather than on whose move it is.
+        if frame.get("contract") != deal.contract:
+            return Applied(deal.state, False, "refund names a different contract")
+        if sender != deal.payer:
+            return Applied(deal.state, False, "only the payer refunds its own escrow")
+        if now_ms < int(deal.offer.get("refundAfterMs", 0)):
+            return Applied(deal.state, False, "the refund time has not arrived")
+        if not deal.locked:
+            return Applied(
+                deal.state, False, "nothing was locked, so nothing can be refunded"
+            )
+        return Applied(State.REFUNDED, True)
 
     if frame.get("contract") not in (deal.contract, None) and kind != "accept":
         return Applied(deal.state, False, "frame names a different contract")
@@ -257,6 +304,8 @@ def _advance(deal: Deal, frame: dict[str, Any], sender: str, state: State) -> De
             fields["payer"] = sender
     elif frame.get("type") == "reveal":
         fields["secret"] = frame.get("secret", "")
+    elif frame.get("type") == "lock":
+        fields["locked"] = True
     return Deal(**fields)
 
 
@@ -279,8 +328,19 @@ def next_frame(
         )
     if owed == "lock":
         return frames.build_lock(sender=me, contract=deal.contract, rail=rail, ref=ref)
+    if owed == "refund":
+        return frames.build_refund(
+            sender=me,
+            contract=deal.contract,
+            reason="the claim window closed with no reveal",
+            ref=ref or None,
+        )
     if owed == "reveal":
         return frames.build_reveal(sender=me, contract=deal.contract, secret=secret)
+    # The outcome follows the road taken: a receipt after a reveal says claimed, one after a
+    # refund says refunded. Reporting "claimed" on a deal nobody delivered would be the single
+    # most misleading line this code could write.
+    outcome = "refunded" if deal.state is State.REFUNDED else "claimed"
     return frames.build_receipt(
-        sender=me, contract=deal.contract, outcome="claimed", rail=rail or None
+        sender=me, contract=deal.contract, outcome=outcome, rail=rail or None
     )
